@@ -73,21 +73,19 @@ function buildModel(state) {
     // so that ties in true AP resolve toward the higher stage.
     const v = { AP: STAGE_AP[i] - TIE_EPSILON * (i + 1) };
     state.currencies.forEach(c => {
-      if (!c.name) return;
-      const raw = stage.drops[c.name] ?? 0;
-      v[c.name] = applyBonus(raw, c.bonus);
+      const raw = stage.drops[c.id] ?? 0;
+      v['c' + c.id] = applyBonus(raw, c.bonus);
     });
     variables['s' + (i + 1)] = v;
   });
 
   const constraints = {};
   state.currencies.forEach(c => {
-    if (!c.name) return;
     const need = state.shopItems
-      .filter(it => it.currency === c.name)
+      .filter(it => it.currencyId === c.id)
       .reduce((sum, it) => sum + (it.price || 0) * (it.buyCount || 0), 0);
-    const remaining = need - (state.owned[c.name] ?? 0);
-    if (remaining > 0) constraints[c.name] = { min: remaining };
+    const remaining = need - (state.owned[c.id] ?? 0);
+    if (remaining > 0) constraints['c' + c.id] = { min: remaining };
   });
 
   const ints = {};
