@@ -576,6 +576,24 @@
       assertEqual(s.owned, { 1: 100 });
     });
 
+    test('normalizeCurrencyIds: 기존 유효 id는 유지', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 7, name: 'a', bonus: 0 }, { id: 2, name: 'b', bonus: 0 }];
+      normalizeCurrencyIds(s);
+      assertEqual(s.currencies[0].id, 7);
+      assertEqual(s.currencies[1].id, 2);
+    });
+
+    test('normalizeCurrencyIds: 구버전 name-key drops/owned 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.stages[0].drops = { '엔화': 100, 1: 50 };
+      s.owned = { '엔화': 200, 1: 30 };
+      normalizeCurrencyIds(s);
+      assertEqual(s.stages[0].drops, { 1: 50 });
+      assertEqual(s.owned, { 1: 30 });
+    });
+
     // === RENDER ===
     const out = document.getElementById('out');
     let passed = 0, failed = 0;
