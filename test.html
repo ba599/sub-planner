@@ -322,6 +322,23 @@
       assertEqual(b[yen].gained, 0);
     });
 
+    test('E2E: 중복 이름 재화도 solver + balance가 독립 계산', () => {
+      const s = defaultState();
+      const a = addCurrency(s, '포인트');
+      const b = addCurrency(s, '포인트');
+      s.stages[0].drops[a] = 5;
+      s.stages[0].drops[b] = 3;
+      s.shopItems = [
+        { currencyId: a, name: 'x', price: 10, buyCount: 1 },
+        { currencyId: b, name: 'y', price: 6, buyCount: 1 },
+      ];
+      const solved = solver.Solve(buildModel(s));
+      assertTrue(solved.feasible, 'solver should find a solution');
+      const bal = computeBalance(s, solved);
+      assertTrue(bal[a].surplus >= 0, 'currency a must meet its target');
+      assertTrue(bal[b].surplus >= 0, 'currency b must meet its target');
+    });
+
     test('hasMinimumData: 빈 state는 false', () => {
       assertEqual(hasMinimumData(defaultState()), false);
     });
