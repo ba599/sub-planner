@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>Logic Tests</title>
+  <style>
+    body { font: 14px/1.5 monospace; padding: 20px; }
+    pre { white-space: pre-wrap; }
+    .pass { color: #2a7; }
+    .fail { color: #c33; }
+    .summary { font-weight: bold; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Logic Tests</h1>
+  <pre id="out">(running...)</pre>
+
+  <script src="src/solver.js"></script>
+  <script src="src/hangul.js"></script>
+  <script src="src/logic.js"></script>
+  <script>
+    const results = [];
+
+    function test(name, fn) {
+      try { fn(); results.push({ name, pass: true }); }
+      catch (e) { results.push({ name, pass: false, err: e.message, stack: e.stack }); }
+    }
+
+    function assertEqual(actual, expected, msg) {
+      const a = JSON.stringify(actual), b = JSON.stringify(expected);
+      if (a !== b) throw new Error((msg ? msg + ': ' : '') + 'expected ' + b + ' got ' + a);
+    }
+
+    function assertTrue(cond, msg) {
+      if (!cond) throw new Error(msg || 'assertion failed');
+    }
+
+    function assertApprox(actual, expected, tol, msg) {
+      if (Math.abs(actual - expected) > (tol ?? 1e-9))
+        throw new Error((msg ? msg + ': ' : '') + 'expected ~' + expected + ' got ' + actual);
+    }
+
+    // === TEST CASES (이후 태스크에서 추가) ===
+
+    test('disassemble: 완성형 문자열 자모 분해', () => {
+      assertEqual(disassemble('가방'), 'ㄱㅏㅂㅏㅇ');
+    });
+
+    test('disassemble: 종성이 있는 단일 문자', () => {
+      assertEqual(disassemble('갑'), 'ㄱㅏㅂ');
+    });
+
+    test('disassemble: 종성 없는 단일 문자', () => {
+      assertEqual(disassemble('가'), 'ㄱㅏ');
+    });
+
+    test('disassemble: 복합 자모가 종성에 있는 경우', () => {
+      // 값 = ㄱ + ㅏ + ㅄ(=ㅂㅅ)
+      assertEqual(disassemble('값'), 'ㄱㅏㅂㅅ');
+    });
+
+    test('disassemble: 복합 중성', () => {
+      // 과 = ㄱ + ㅘ(=ㅗㅏ)
+      assertEqual(disassemble('과'), 'ㄱㅗㅏ');
+    });
+
+    test('disassemble: 한글 아닌 문자는 그대로', () => {
+      assertEqual(disassemble('abc'), 'abc');
+    });
+
+    test('disassemble: 빈 문자열', () => {
+      assertEqual(disassemble(''), '');
+    });
+
+    test('disassemble: 접두사 매칭용 기본 케이스 (갑 ⊂ 가방)', () => {
+      // "갑"의 자모는 "가방"의 자모 접두사여야 함
+      assertTrue(disassemble('가방').startsWith(disassemble('갑')));
+    });
+
+    test('getChoseong: 기본', () => {
+      assertEqual(getChoseong('가방'), 'ㄱㅂ');
+    });
+
+    test('getChoseong: 공백 보존', () => {
+      assertEqual(getChoseong('띄어 쓰기'), 'ㄸㅇ ㅆㄱ');
+    });
+
+    test('getChoseong: 여러 글자', () => {
+      assertEqual(getChoseong('기술노트'), 'ㄱㅅㄴㅌ');
+    });
+
+    test('getChoseong: 비한글 문자는 제거', () => {
+      assertEqual(getChoseong('가a나b'), 'ㄱㄴ');
+    });
+
+    test('getChoseong: 빈 문자열', () => {
+      assertEqual(getChoseong(''), '');
+    });
+
+    test('applyBonus: 보너스 0이면 원본 그대로', () => {
+      assertEqual(applyBonus(10, 0), 10);
+    });
+
+    test('applyBonus: 보너스 5이면 10 → 11 (ceil)', () => {
+      assertEqual(applyBonus(10, 5), 11);  // 10 * 1.05 = 10.5 → 11
+    });
+
+    test('applyBonus: 보너스 -5이면 10 → 10 (ceil of 9.5)', () => {
+      assertEqual(applyBonus(10, -5), 10);
+    });
+
+    test('applyBonus: 보너스 100이면 두 배', () => {
+      assertEqual(applyBonus(7, 100), 14);
+    });
+
+    test('applyBonus: 원본 0은 항상 0', () => {
+      assertEqual(applyBonus(0, 150), 0);
+    });
+
+    test('applyBonus: 부동소수점 안정성', () => {
+      // 3 * (100 + 10) / 100 = 3.3 → ceil = 4
+      assertEqual(applyBonus(3, 10), 4);
+    });
+
+    test('defaultState: 빈 재화 배열', () => {
+      const s = defaultState();
+      assertEqual(s.currencies, []);
+    });
+
+    test('defaultState: 12개 스테이지 고정', () => {
+      const s = defaultState();
+      assertEqual(s.stages.length, 12);
+      s.stages.forEach(stage => assertEqual(stage.drops, {}));
+    });
+
+    test('defaultState: 빈 shopItems', () => {
+      assertEqual(defaultState().shopItems, []);
+    });
+
+    test('defaultState: 빈 owned', () => {
+      assertEqual(defaultState().owned, {});
+    });
+
+    test('defaultState: 모든 그룹 활성', () => {
+      assertEqual(defaultState().groupsEnabled, [true, true, true]);
+    });
+
+    test('buildModel: 기본 최소화 목표는 AP', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[0].drops['엔화'] = 5;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const m = buildModel(s);
+      assertEqual(m.optimize, 'AP');
+      assertEqual(m.opType, 'min');
+    });
+
+    test('buildModel: 스테이지 변수에 AP와 재화 드랍 포함', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[0].drops['엔화'] = 5;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const m = buildModel(s);
+      assertApprox(m.variables.s1.AP, 10, 1e-4);
+      assertEqual(m.variables.s1['엔화'], 5);
+    });
+
+    test('buildModel: 보너스가 드랍에 적용됨', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 50, shopName: '' }];
+      s.stages[0].drops['엔화'] = 4;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const m = buildModel(s);
+      assertEqual(m.variables.s1['엔화'], 6);  // ceil(4 * 1.5)
+    });
+
+    test('buildModel: AP는 인덱스별 고정값', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      for (let i = 0; i < 12; i++) s.stages[i].drops['엔화'] = 1;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const m = buildModel(s);
+      assertApprox(m.variables.s1.AP, 10, 1e-4);
+      assertApprox(m.variables.s5.AP, 15, 1e-4);
+      assertApprox(m.variables.s12.AP, 20, 1e-4);
+    });
+
+    test('buildModel: 비활성 그룹의 스테이지는 변수에서 제외', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      for (let i = 0; i < 12; i++) s.stages[i].drops['엔화'] = 1;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      s.groupsEnabled = [true, false, false];
+      const m = buildModel(s);
+      assertTrue(m.variables.s1, 's1 should exist');
+      assertTrue(m.variables.s4, 's4 should exist');
+      assertTrue(!m.variables.s5, 's5 should not exist');
+      assertTrue(!m.variables.s12, 's12 should not exist');
+    });
+
+    test('buildModel: 제약은 필요량에서 보유량을 뺀 값', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[0].drops['엔화'] = 1;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 300, buyCount: 2 }];  // need=600
+      s.owned['엔화'] = 200;
+      const m = buildModel(s);
+      assertEqual(m.constraints['엔화'], { min: 400 });
+    });
+
+    test('buildModel: 보유량이 필요량 이상이면 제약 제외', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[0].drops['엔화'] = 1;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      s.owned['엔화'] = 999;
+      const m = buildModel(s);
+      assertTrue(!('엔화' in m.constraints));
+    });
+
+    test('buildModel: 모든 스테이지 변수는 ints에 표시', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      for (let i = 0; i < 12; i++) s.stages[i].drops['엔화'] = 1;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const m = buildModel(s);
+      for (let i = 1; i <= 12; i++) assertEqual(m.ints['s' + i], 1);
+    });
+
+    test('buildModel: 빈 이름 재화는 무시', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '', bonus: 0, shopName: '' }, { name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[0].drops['엔화'] = 5;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 50, buyCount: 1 }];
+      const m = buildModel(s);
+      assertTrue(!('' in m.variables.s1));
+      assertEqual(m.variables.s1['엔화'], 5);
+    });
+
+    test('computeBalance: 단일 재화 단순 케이스', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[0].drops['엔화'] = 5;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 2 }];
+      s.owned['엔화'] = 50;
+      const b = computeBalance(s, { s1: 40 });
+      assertEqual(b['엔화'], { owned: 50, gained: 200, needed: 200, surplus: 50 });
+    });
+
+    test('computeBalance: 보너스 적용된 획득량', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 50, shopName: '' }];
+      s.stages[0].drops['엔화'] = 4;  // ceil(4*1.5) = 6
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 12, buyCount: 1 }];
+      const b = computeBalance(s, { s1: 2 });
+      assertEqual(b['엔화'].gained, 12);  // 6 * 2
+    });
+
+    test('computeBalance: 여러 스테이지 합산', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[0].drops['엔화'] = 5;
+      s.stages[4].drops['엔화'] = 8;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const b = computeBalance(s, { s1: 3, s5: 10 });
+      assertEqual(b['엔화'].gained, 95);  // 5*3 + 8*10
+    });
+
+    test('computeBalance: 여러 재화', () => {
+      const s = defaultState();
+      s.currencies = [
+        { name: '엔화', bonus: 0, shopName: '' },
+        { name: '달러', bonus: 0, shopName: '' },
+      ];
+      s.stages[0].drops['엔화'] = 5;
+      s.stages[0].drops['달러'] = 2;
+      s.shopItems = [
+        { currency: '엔화', name: 'a', price: 50, buyCount: 1 },
+        { currency: '달러', name: 'b', price: 20, buyCount: 2 },
+      ];
+      const b = computeBalance(s, { s1: 10 });
+      assertEqual(b['엔화'], { owned: 0, gained: 50, needed: 50, surplus: 0 });
+      assertEqual(b['달러'], { owned: 0, gained: 20, needed: 40, surplus: -20 });
+    });
+
+    test('computeBalance: 비활성 그룹은 획득량에 기여하지 않음', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.stages[4].drops['엔화'] = 10;
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      s.groupsEnabled = [true, false, true];
+      const b = computeBalance(s, { s5: 3 });  // solver에서 올 수 없지만 방어적 처리 확인
+      assertEqual(b['엔화'].gained, 0);
+    });
+
+    test('hasMinimumData: 빈 state는 false', () => {
+      assertEqual(hasMinimumData(defaultState()), false);
+    });
+
+    test('hasMinimumData: 재화만 있으면 false (상점 아이템 없음)', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      assertEqual(hasMinimumData(s), false);
+    });
+
+    test('hasMinimumData: 재화 + 유효 아이템 있으면 true', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      assertEqual(hasMinimumData(s), true);
+    });
+
+    test('hasMinimumData: buyCount=0 인 아이템만 있으면 false', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 0 }];
+      assertEqual(hasMinimumData(s), false);
+    });
+
+    test('hasMinimumData: price=0 인 아이템만 있으면 false', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 0, buyCount: 1 }];
+      assertEqual(hasMinimumData(s), false);
+    });
+
+    test('hasMinimumData: 모든 그룹 비활성이면 false', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      s.groupsEnabled = [false, false, false];
+      assertEqual(hasMinimumData(s), false);
+    });
+
+    test('hasMinimumData: 빈 이름 재화는 카운트하지 않음', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '', bonus: 0, shopName: '' }];
+      s.shopItems = [{ currency: '', name: 'x', price: 100, buyCount: 1 }];
+      assertEqual(hasMinimumData(s), false);
+    });
+
+    test('validateState: 유효한 기본 state', () => {
+      assertEqual(validateState(defaultState()), null);
+    });
+
+    test('validateState: null 거부', () => {
+      assertTrue(validateState(null) !== null);
+    });
+
+    test('validateState: currencies 배열 아님 거부', () => {
+      const s = defaultState(); s.currencies = {};
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: stages 길이 12 아니면 거부', () => {
+      const s = defaultState(); s.stages = s.stages.slice(0, 11);
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: stages[i].drops 없으면 거부', () => {
+      const s = defaultState(); delete s.stages[0].drops;
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: shopItems 필드 누락 거부', () => {
+      const s = defaultState();
+      s.shopItems = [{ currency: '엔화', name: 'x' }];  // price/buyCount 누락
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: groupsEnabled 길이 3 아니면 거부', () => {
+      const s = defaultState(); s.groupsEnabled = [true, true];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: owned가 객체 아니면 거부', () => {
+      const s = defaultState(); s.owned = [];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: currencies 내부 필드 타입 검증', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 'oops', shopName: '' }];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('defaultState: 빈 presetItems', () => {
+      assertEqual(defaultState().presetItems, []);
+    });
+
+    test('validateState: presetItems 배열 아님 거부', () => {
+      const s = defaultState();
+      s.presetItems = {};
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: presetItems 항목에 필드 누락 거부', () => {
+      const s = defaultState();
+      s.presetItems = [{ name: 'x' }];  // price/buyCount 누락
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: presetItems 항목 타입 검증', () => {
+      const s = defaultState();
+      s.presetItems = [{ name: 'x', price: '100', buyCount: 1 }];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: 정상 presetItems 통과', () => {
+      const s = defaultState();
+      s.presetItems = [{ name: '기술노트', price: 100, buyCount: 5 }];
+      assertEqual(validateState(s), null);
+    });
+
+    test('matchPresetItems: 빈 쿼리는 전체를 등록 순서대로 반환', () => {
+      const items = [
+        { name: '가방', price: 50, buyCount: 10 },
+        { name: '기술노트', price: 100, buyCount: 5 },
+        { name: '일반 기술노트', price: 200, buyCount: 3 },
+      ];
+      const r = matchPresetItems('', items);
+      assertEqual(r.map(i => i.name), ['가방', '기술노트', '일반 기술노트']);
+    });
+
+    test('matchPresetItems: 빈 쿼리는 원본 배열을 변형하지 않음 (slice)', () => {
+      const items = [{ name: '가방', price: 50, buyCount: 10 }];
+      const r = matchPresetItems('', items);
+      r.push({ name: 'bad', price: 0, buyCount: 0 });
+      assertEqual(items.length, 1);
+    });
+
+    test('matchPresetItems: 자모 접두사 매칭 — "가" → "가방"', () => {
+      const items = [
+        { name: '가방', price: 50, buyCount: 10 },
+        { name: '열쇠', price: 20, buyCount: 3 },
+      ];
+      assertEqual(matchPresetItems('가', items).map(i => i.name), ['가방']);
+    });
+
+    test('matchPresetItems: 미완성 자모 접두사 — "갑" → "가방"', () => {
+      const items = [
+        { name: '가방', price: 50, buyCount: 10 },
+        { name: '열쇠', price: 20, buyCount: 3 },
+      ];
+      assertEqual(matchPresetItems('갑', items).map(i => i.name), ['가방']);
+    });
+
+    test('matchPresetItems: 초성 접두사 — "ㄱㅂ" → "가방"', () => {
+      const items = [
+        { name: '가방', price: 50, buyCount: 10 },
+        { name: '열쇠', price: 20, buyCount: 3 },
+      ];
+      assertEqual(matchPresetItems('ㄱㅂ', items).map(i => i.name), ['가방']);
+    });
+
+    test('matchPresetItems: 중간 부분일치 — "기술노트" → 4개', () => {
+      const items = [
+        { name: '기술노트', price: 100, buyCount: 5 },
+        { name: '일반 기술노트', price: 200, buyCount: 3 },
+        { name: '상급 기술노트', price: 400, buyCount: 2 },
+        { name: '최고급 기술노트', price: 800, buyCount: 1 },
+        { name: '가방', price: 50, buyCount: 10 },
+      ];
+      assertEqual(
+        matchPresetItems('기술노트', items).map(i => i.name),
+        ['기술노트', '일반 기술노트', '상급 기술노트', '최고급 기술노트']
+      );
+    });
+
+    test('matchPresetItems: 초성 중간 부분일치 — "ㄱㅅㄴㅌ" → 기술노트 계열 4개', () => {
+      const items = [
+        { name: '기술노트', price: 100, buyCount: 5 },
+        { name: '일반 기술노트', price: 200, buyCount: 3 },
+        { name: '상급 기술노트', price: 400, buyCount: 2 },
+        { name: '최고급 기술노트', price: 800, buyCount: 1 },
+        { name: '가방', price: 50, buyCount: 10 },
+      ];
+      assertEqual(
+        matchPresetItems('ㄱㅅㄴㅌ', items).map(i => i.name),
+        ['기술노트', '일반 기술노트', '상급 기술노트', '최고급 기술노트']
+      );
+    });
+
+    test('matchPresetItems: 등록 순서 보존 (정렬 없음)', () => {
+      const items = [
+        { name: '최고급 기술노트', price: 800, buyCount: 1 },
+        { name: '일반 기술노트', price: 200, buyCount: 3 },
+        { name: '기술노트', price: 100, buyCount: 5 },
+      ];
+      assertEqual(
+        matchPresetItems('기술노트', items).map(i => i.name),
+        ['최고급 기술노트', '일반 기술노트', '기술노트']
+      );
+    });
+
+    test('matchPresetItems: 매칭 없음', () => {
+      const items = [{ name: '가방', price: 50, buyCount: 10 }];
+      assertEqual(matchPresetItems('zzz', items), []);
+    });
+
+    test('matchPresetItems: "일반" → "일반 기술노트"만', () => {
+      const items = [
+        { name: '기술노트', price: 100, buyCount: 5 },
+        { name: '일반 기술노트', price: 200, buyCount: 3 },
+        { name: '상급 기술노트', price: 400, buyCount: 2 },
+      ];
+      assertEqual(matchPresetItems('일반', items).map(i => i.name), ['일반 기술노트']);
+    });
+
+    // === RENDER ===
+    const out = document.getElementById('out');
+    let passed = 0, failed = 0;
+    const lines = results.map(r => {
+      if (r.pass) { passed++; return '<span class="pass">✓ ' + r.name + '</span>'; }
+      failed++;
+      return '<span class="fail">✗ ' + r.name + '\n    ' + r.err + '</span>';
+    });
+    lines.push('<div class="summary">' + passed + ' passed, ' + failed + ' failed</div>');
+    out.innerHTML = lines.join('\n');
+    document.title = (failed === 0 ? '✓' : '✗') + ' ' + passed + '/' + (passed + failed);
+  </script>
+</body>
+</html>

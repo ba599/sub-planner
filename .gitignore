@@ -1,0 +1,7 @@
+# OS/에디터
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+deploy.md

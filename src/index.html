@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>이벤트 플래너</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; max-width: 960px; margin: 20px auto; padding: 0 16px; }
+    footer { margin-top: 50vh; padding: 12px 0; text-align: center; color: #888; font-size: 0.85em; }
+    footer a { color: inherit; }
+    h1 { font-size: 1.4em; display: flex; justify-content: space-between; align-items: center; }
+    h1 .toolbar button { margin-left: 6px; font-size: 0.7em; }
+    details { border: 1px solid #8884; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; }
+    details > summary { font-weight: bold; cursor: pointer; width: fit-content; }
+    table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+    th, td { border: 1px solid #8884; padding: 4px 8px; text-align: center; }
+    th { background: #8881; }
+    input[type="text"], input[type="number"] { width: 100%; box-sizing: border-box; padding: 2px 4px; font: inherit; }
+    input[readonly] { background: #8881; color: #888; }
+    .btn-row { margin-top: 8px; }
+    .btn-del { color: #c33; background: none; border: none; cursor: pointer; font-size: 1.1em; }
+    .group-disabled { opacity: 0.4; }
+    .result-ok { color: #2a7; font-size: 1.6em; font-weight: bold; text-align: center; margin: 12px 0; }
+    .group-toggle-row { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; }
+    .group-toggle-row label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+    .stages-table tr.group-disabled { opacity: 0.35; }
+    .result-msg { padding: 12px; text-align: center; color: #888; }
+    .result-err { padding: 12px; text-align: center; color: #c33; background: #c331; border-radius: 6px; }
+    .owned-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+    .owned-row label { display: inline-flex; gap: 4px; align-items: center; }
+    .owned-row input { width: 80px; }
+    .shop-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; }
+    .shop-cell { border: 1px solid #8884; border-radius: 4px; padding: 6px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .shop-cell-row { display: flex; gap: 4px; align-items: center; }
+    .shop-cell-row input { flex: 1; min-width: 0; }
+    .shop-cell-label { font-size: 0.85em; color: #888; min-width: 28px; }
+    .shop-cell-empty { border-style: dashed; opacity: 0.3; }
+    .shop-cell-add { align-items: stretch; justify-content: center; }
+    .shop-cell-add button { width: 100%; height: 100%; padding: 8px; cursor: pointer; }
+    .stage-rec-title { font-weight: bold; margin-top: 12px; }
+    .stage-rec-table tbody td:nth-child(1),
+    .stage-rec-table tbody td:nth-child(3) { background: rgba(42,170,119,0.18); }
+    #json-view, #preset-view { display: none; }
+    #sec-shops { position: relative; }
+    .preset-toolbar {
+      position: absolute;
+      top: 6px;
+      right: 10px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .preset-toolbar button {
+      font-size: 0.8em;
+      cursor: pointer;
+    }
+    .info-icon {
+      position: relative;
+      cursor: help;
+      color: #888;
+      font-size: 1.1em;
+      user-select: none;
+      font-weight: normal;
+    }
+    .info-tip {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      width: 250px;
+      padding: 8px 10px;
+      background: Canvas;
+      color: CanvasText;
+      border: 1px solid #8884;
+      border-radius: 6px;
+      box-shadow: 0 2px 8px #0003;
+      font-size: 0.85em;
+      line-height: 1.5;
+      white-space: normal;
+      text-align: left;
+      z-index: 20;
+    }
+    .info-icon:hover .info-tip { display: block; }
+    .shop-cell .item-name-row { position: relative; }
+    .autocomplete-dropdown {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 100%;
+      z-index: 10;
+      background: Canvas;
+      border: 1px solid #8884;
+      max-height: 174px;
+      overflow-y: auto;
+      box-shadow: 0 2px 6px #0002;
+    }
+    .autocomplete-item {
+      padding: 4px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .autocomplete-item.selected,
+    .autocomplete-item:hover { background: #8883; }
+    #json-view textarea,
+    #preset-view textarea { width: 100%; height: 400px; font: 12px/1.4 monospace; }
+  </style>
+</head>
+<body>
+  <h1>
+    이벤트 플래너
+    <span class="toolbar">
+      <button id="btn-json">JSON 보기</button>
+      <button id="btn-export">내보내기</button>
+      <button id="btn-import">불러오기</button>
+      <input type="file" id="file-import" accept=".json" style="display:none">
+    </span>
+  </h1>
+
+  <div id="main-view">
+    <details id="sec-result" open>
+      <summary>1. 보유량 &amp; 결과</summary>
+      <div id="owned-container"></div>
+      <div id="result-container"></div>
+    </details>
+
+    <details id="sec-currencies" open>
+      <summary>2. 재화 / 상점</summary>
+      <div id="currencies-container"></div>
+    </details>
+
+    <details id="sec-stages" open>
+      <summary>3. 스테이지 (12개 고정)</summary>
+      <div id="stages-container"></div>
+    </details>
+
+    <details id="sec-shops" open>
+      <summary>4. 상점</summary>
+      <div class="preset-toolbar">
+        <button id="btn-preset-edit">프리셋 수정</button>
+        <span class="info-icon">ⓘ<span class="info-tip">자동완성 프리셋은 실제 인게임 상점 정보와 다를 수 있습니다.<br>특히 개수 부분은 이벤트기간 별로 달라지기 쉬우니 반드시 이중으로 체크해주세요.</span></span>
+      </div>
+      <div id="shops-container"></div>
+    </details>
+  </div>
+
+  <div id="json-view">
+    <textarea id="json-textarea"></textarea>
+    <div class="btn-row">
+      <button id="btn-json-apply">적용</button>
+      <button id="btn-json-cancel">취소</button>
+    </div>
+  </div>
+
+  <div id="preset-view">
+    <textarea id="preset-textarea"></textarea>
+    <div class="btn-row">
+      <button id="btn-preset-apply">적용</button>
+      <button id="btn-preset-cancel">취소</button>
+      <button id="btn-preset-reset">프리셋 초기화</button>
+    </div>
+  </div>
+
+  <footer>
+    Hangul search powered by <a href="https://github.com/toss/es-hangul" target="_blank" rel="noopener">es-hangul</a>
+  </footer>
+
+  <script src="solver.js"></script>
+  <script src="hangul.js"></script>
+  <script src="logic.js"></script>
+  <script src="preset-defaults.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
