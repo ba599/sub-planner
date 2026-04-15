@@ -84,11 +84,11 @@ function renderCurrenciesSection() {
   table.innerHTML = '<thead><tr><th>재화</th><th>보너스 % <span class="info-icon">ⓘ<span class="info-tip">여러 보너스를 합칠 때 <code>25+15+15+15+25+15</code>처럼 <code>+</code>로 이어서 입력할 수 있습니다.</span></span></th><th></th></tr></thead>';
   const tbody = document.createElement('tbody');
 
-  state.currencies.forEach((c, idx) => {
+  state.currencies.forEach((c) => {
     const tr = document.createElement('tr');
     tr.appendChild(makeTextCell(c.name, (v) => {
-      if (v === state.currencies[idx].name) return;
-      renameCurrency(idx, v);
+      if (v === c.name) return;
+      c.name = v;
       saveState();
       renderResultSection();
       renderStagesSection();
@@ -96,7 +96,7 @@ function renderCurrenciesSection() {
       recompute();
     }, '이벤트 포인트, 벚꽃 찹쌀떡, etc...'));
     tr.appendChild(makeSumCell(c.bonus, v => { c.bonus = v; afterValueEdit(); }));
-    tr.appendChild(makeDeleteCell(() => { removeCurrency(idx); }));
+    tr.appendChild(makeDeleteCell(() => { removeCurrency(c.id); }));
     tbody.appendChild(tr);
   });
 
@@ -106,7 +106,11 @@ function renderCurrenciesSection() {
   const addBtn = document.createElement('button');
   addBtn.textContent = '+ 재화 추가';
   addBtn.addEventListener('click', () => {
-    state.currencies.push({ name: '', bonus: 0 });
+    state.currencies.push({
+      id: allocateCurrencyId(state.currencies),
+      name: '',
+      bonus: 0,
+    });
     afterEdit();
   });
   const row = document.createElement('div');
@@ -528,31 +532,13 @@ function afterValueEdit() {
   recompute();
 }
 
-function renameCurrency(idx, newName) {
-  const old = state.currencies[idx].name;
-  if (newName === old) return;
-  state.currencies[idx].name = newName;
-  state.stages.forEach(stage => {
-    if (old in stage.drops) {
-      stage.drops[newName] = stage.drops[old];
-      delete stage.drops[old];
-    }
-  });
-  if (old in state.owned) {
-    state.owned[newName] = state.owned[old];
-    delete state.owned[old];
-  }
-  state.shopItems.forEach(it => {
-    if (it.currency === old) it.currency = newName;
-  });
-}
-
-function removeCurrency(idx) {
-  const name = state.currencies[idx].name;
-  state.currencies.splice(idx, 1);
-  state.stages.forEach(stage => { delete stage.drops[name]; });
-  delete state.owned[name];
-  state.shopItems = state.shopItems.filter(it => it.currency !== name);
+function removeCurrency(id) {
+  const i = state.currencies.findIndex(c => c.id === id);
+  if (i < 0) return;
+  state.currencies.splice(i, 1);
+  state.stages.forEach(stage => { delete stage.drops[id]; });
+  delete state.owned[id];
+  state.shopItems = state.shopItems.filter(it => it.currencyId !== id);
   afterEdit();
 }
 
