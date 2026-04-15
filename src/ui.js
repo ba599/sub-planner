@@ -85,15 +85,14 @@ function renderCurrenciesSection() {
 
   state.currencies.forEach((c, idx) => {
     const tr = document.createElement('tr');
-    tr.appendChild(makeTextCell(c.name, (v, input) => {
-      if (v === c.name) return;
-      if (v && state.currencies.some((cc, i) => i !== idx && cc.name === v)) {
-        alert('이미 같은 이름의 재화가 존재합니다: ' + v);
-        input.value = c.name;
-        return;
-      }
+    tr.appendChild(makeTextCell(c.name, (v) => {
+      if (v === state.currencies[idx].name) return;
       renameCurrency(idx, v);
-      afterValueEdit();
+      saveState();
+      renderResultSection();
+      renderStagesSection();
+      renderShopsSection();
+      recompute();
     }, '이벤트 포인트, 벚꽃 찹쌀떡, etc...'));
     tr.appendChild(makeSumCell(c.bonus, v => { c.bonus = v; afterValueEdit(); }));
     tr.appendChild(makeDeleteCell(() => { removeCurrency(idx); }));
@@ -450,7 +449,7 @@ function makeTextInput(value, onCommit, placeholder) {
   input.type = 'text';
   input.value = value ?? '';
   if (placeholder) input.placeholder = placeholder;
-  input.addEventListener('blur', () => onCommit(input.value, input));
+  input.addEventListener('input', () => onCommit(input.value, input));
   return input;
 }
 
