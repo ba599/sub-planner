@@ -123,7 +123,7 @@ function renderStagesSection() {
   const container = document.getElementById('stages-container');
   container.innerHTML = '';
 
-  const currencyCols = state.currencies.filter(c => c.name);
+  const currencyCols = state.currencies;
 
   // 그룹 체크박스 행
   const toggleRow = document.createElement('div');
@@ -154,7 +154,7 @@ function renderStagesSection() {
   headRow.innerHTML = '<th>#</th><th>AP</th>';
   currencyCols.forEach(c => {
     const th = document.createElement('th');
-    th.textContent = c.name;
+    th.textContent = currencyLabel(c);
     headRow.appendChild(th);
   });
   thead.appendChild(headRow);
@@ -172,10 +172,10 @@ function renderStagesSection() {
     apTd.textContent = STAGE_AP[i];
     tr.appendChild(apTd);
     currencyCols.forEach(c => {
-      const value = state.stages[i].drops[c.name] ?? 0;
+      const value = state.stages[i].drops[c.id] ?? 0;
       tr.appendChild(makeNumCell(value, v => {
-        if (v) state.stages[i].drops[c.name] = v;
-        else delete state.stages[i].drops[c.name];
+        if (v) state.stages[i].drops[c.id] = v;
+        else delete state.stages[i].drops[c.id];
         afterValueEdit();
       }));
     });
