@@ -58,16 +58,16 @@ function renderResultSection() {
   const row = document.createElement('div');
   row.className = 'owned-row';
   row.appendChild(document.createTextNode('보유량:'));
-  state.currencies.filter(c => c.name).forEach(c => {
+  state.currencies.forEach(c => {
     const label = document.createElement('label');
-    label.textContent = c.name;
+    label.textContent = currencyLabel(c);
     const input = document.createElement('input');
     input.type = 'number';
     input.min = '0';
-    input.value = state.owned[c.name] ?? 0;
+    input.value = state.owned[c.id] ?? 0;
     input.addEventListener('blur', () => {
       const n = Number(input.value);
-      state.owned[c.name] = Number.isFinite(n) && n >= 0 ? n : 0;
+      state.owned[c.id] = Number.isFinite(n) && n >= 0 ? n : 0;
       afterValueEdit();
     });
     label.appendChild(input);
