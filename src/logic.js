@@ -116,10 +116,10 @@ function computeBalance(state, solverResult) {
 }
 
 function hasMinimumData(state) {
-  const hasCurrency = state.currencies.some(c => c.name && c.name.length > 0);
+  const hasCurrency = state.currencies.length > 0;
   const hasGroup = state.groupsEnabled.some(g => g);
   const hasItem = state.shopItems.some(it =>
-    it.currency && (it.price || 0) > 0 && (it.buyCount || 0) > 0
+    typeof it.currencyId === 'number' && (it.price || 0) > 0 && (it.buyCount || 0) > 0
   );
   return hasCurrency && hasGroup && hasItem;
 }

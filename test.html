@@ -328,44 +328,44 @@
 
     test('hasMinimumData: 재화만 있으면 false (상점 아이템 없음)', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      addCurrency(s, '엔화');
       assertEqual(hasMinimumData(s), false);
     });
 
     test('hasMinimumData: 재화 + 유효 아이템 있으면 true', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       assertEqual(hasMinimumData(s), true);
     });
 
     test('hasMinimumData: buyCount=0 인 아이템만 있으면 false', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 0 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 0 }];
       assertEqual(hasMinimumData(s), false);
     });
 
     test('hasMinimumData: price=0 인 아이템만 있으면 false', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 0, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 0, buyCount: 1 }];
       assertEqual(hasMinimumData(s), false);
     });
 
     test('hasMinimumData: 모든 그룹 비활성이면 false', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       s.groupsEnabled = [false, false, false];
       assertEqual(hasMinimumData(s), false);
     });
 
-    test('hasMinimumData: 빈 이름 재화는 카운트하지 않음', () => {
+    test('hasMinimumData: 빈 이름 재화도 카운트함', () => {
       const s = defaultState();
-      s.currencies = [{ name: '', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '', name: 'x', price: 100, buyCount: 1 }];
-      assertEqual(hasMinimumData(s), false);
+      const empty = addCurrency(s, '');
+      s.shopItems = [{ currencyId: empty, name: 'x', price: 100, buyCount: 1 }];
+      assertEqual(hasMinimumData(s), true);
     });
 
     test('validateState: 유효한 기본 state', () => {
