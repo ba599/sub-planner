@@ -86,7 +86,7 @@ function renderCurrenciesSection() {
 
   state.currencies.forEach((c) => {
     const tr = document.createElement('tr');
-    tr.appendChild(makeTextCell(c.name, (v) => {
+    const nameCell = makeTextCell(c.name, (v) => {
       if (v === c.name) return;
       c.name = v;
       saveState();
@@ -94,7 +94,14 @@ function renderCurrenciesSection() {
       renderStagesSection();
       renderShopsSection();
       recompute();
-    }, '이벤트 포인트, 벚꽃 찹쌀떡, etc...'));
+    }, '이벤트 포인트, 벚꽃 찹쌀떡, etc...');
+    const nameInput = nameCell.querySelector('input');
+    nameInput.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      focusNextCurrencyName(nameInput);
+    });
+    tr.appendChild(nameCell);
     tr.appendChild(makeSumCell(c.bonus, v => { c.bonus = v; afterValueEdit(); }));
     tr.appendChild(makeDeleteCell(() => { removeCurrency(c.id); }));
     tbody.appendChild(tr);
@@ -421,6 +428,17 @@ function selectPresetItem(shopItemIdx, preset) {
   focusNextShopItemNameIn(currencyId, shopItemIdx);
 }
 
+function focusNextCurrencyName(current) {
+  const inputs = Array.from(
+    document.querySelectorAll('#currencies-container tbody tr > td:first-child input')
+  );
+  const idx = inputs.indexOf(current);
+  if (idx < 0) { current.blur(); return; }
+  const next = inputs[idx + 1];
+  if (next) next.focus();
+  else current.blur();
+}
+
 function focusNextShopItemNameIn(currencyId, currentIdx) {
   const nextIdx = state.shopItems.findIndex(
     (s, i) => i > currentIdx && s.currencyId === currencyId
@@ -609,7 +627,8 @@ function renderSolvedResult(container, solved) {
     const runs = Math.round(solved['s' + (i + 1)] ?? 0);
     if (!runs) continue;
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>스테이지 ${i + 1}</td><td>${STAGE_AP[i]} ap</td><td>${runs} 번</td>`;
+    const padded = String(i + 1).padStart(2, '0');
+    tr.innerHTML = `<td><span class="desktop-only">스테이지 ${i + 1}</span><span class="mobile-only">${padded}</span></td><td>${STAGE_AP[i]} ap</td><td>${runs} 번</td>`;
     activeCurrencies.forEach(c => {
       const perRun = applyBonus(state.stages[i].drops[c.id] ?? 0, c.bonus);
       const td = document.createElement('td');
@@ -654,7 +673,10 @@ function renderBalanceTable(container, solved) {
     balBody.appendChild(tr);
   });
   balanceTable.appendChild(balBody);
-  container.appendChild(balanceTable);
+  const wrap = document.createElement('div');
+  wrap.className = 'scroll-x';
+  wrap.appendChild(balanceTable);
+  container.appendChild(wrap);
 }
 
 function currencyLabel(c) {
