@@ -19,6 +19,37 @@ function parseSumExpr(text) {
   return total;
 }
 
+function allocateCurrencyId(currencies) {
+  const used = new Set(currencies.map(c => c.id));
+  for (let i = 1; ; i++) {
+    if (!used.has(i)) return i;
+  }
+}
+
+function normalizeCurrencyIds(state) {
+  const used = new Set();
+  state.currencies.forEach(c => {
+    if (typeof c.id !== 'number' || !Number.isInteger(c.id) || c.id < 1 || used.has(c.id)) {
+      const temp = [];
+      used.forEach(id => temp.push({ id }));
+      c.id = allocateCurrencyId(temp);
+    }
+    used.add(c.id);
+  });
+
+  state.shopItems = state.shopItems.filter(it => used.has(it.currencyId));
+
+  state.stages.forEach(stage => {
+    Object.keys(stage.drops).forEach(key => {
+      if (!used.has(Number(key))) delete stage.drops[key];
+    });
+  });
+
+  Object.keys(state.owned).forEach(key => {
+    if (!used.has(Number(key))) delete state.owned[key];
+  });
+}
+
 function defaultState() {
   return {
     currencies: [],
@@ -42,21 +73,19 @@ function buildModel(state) {
     // so that ties in true AP resolve toward the higher stage.
     const v = { AP: STAGE_AP[i] - TIE_EPSILON * (i + 1) };
     state.currencies.forEach(c => {
-      if (!c.name) return;
-      const raw = stage.drops[c.name] ?? 0;
-      v[c.name] = applyBonus(raw, c.bonus);
+      const raw = stage.drops[c.id] ?? 0;
+      v['c' + c.id] = applyBonus(raw, c.bonus);
     });
     variables['s' + (i + 1)] = v;
   });
 
   const constraints = {};
   state.currencies.forEach(c => {
-    if (!c.name) return;
     const need = state.shopItems
-      .filter(it => it.currency === c.name)
+      .filter(it => it.currencyId === c.id)
       .reduce((sum, it) => sum + (it.price || 0) * (it.buyCount || 0), 0);
-    const remaining = need - (state.owned[c.name] ?? 0);
-    if (remaining > 0) constraints[c.name] = { min: remaining };
+    const remaining = need - (state.owned[c.id] ?? 0);
+    if (remaining > 0) constraints['c' + c.id] = { min: remaining };
   });
 
   const ints = {};
@@ -68,10 +97,9 @@ function buildModel(state) {
 function computeBalance(state, solverResult) {
   const result = {};
   state.currencies.forEach(c => {
-    if (!c.name) return;
-    const owned = state.owned[c.name] ?? 0;
+    const owned = state.owned[c.id] ?? 0;
     const needed = state.shopItems
-      .filter(it => it.currency === c.name)
+      .filter(it => it.currencyId === c.id)
       .reduce((sum, it) => sum + (it.price || 0) * (it.buyCount || 0), 0);
     let gained = 0;
     state.stages.forEach((stage, i) => {
@@ -79,19 +107,19 @@ function computeBalance(state, solverResult) {
       if (!state.groupsEnabled[group]) return;
       const runs = solverResult['s' + (i + 1)] ?? 0;
       if (!runs) return;
-      const perRun = applyBonus(stage.drops[c.name] ?? 0, c.bonus);
+      const perRun = applyBonus(stage.drops[c.id] ?? 0, c.bonus);
       gained += perRun * runs;
     });
-    result[c.name] = { owned, gained, needed, surplus: owned + gained - needed };
+    result[c.id] = { owned, gained, needed, surplus: owned + gained - needed };
   });
   return result;
 }
 
 function hasMinimumData(state) {
-  const hasCurrency = state.currencies.some(c => c.name && c.name.length > 0);
+  const hasCurrency = state.currencies.length > 0;
   const hasGroup = state.groupsEnabled.some(g => g);
   const hasItem = state.shopItems.some(it =>
-    it.currency && (it.price || 0) > 0 && (it.buyCount || 0) > 0
+    typeof it.currencyId === 'number' && (it.price || 0) > 0 && (it.buyCount || 0) > 0
   );
   return hasCurrency && hasGroup && hasItem;
 }
@@ -123,8 +151,6 @@ function validateState(s) {
     if (!c || typeof c !== 'object') return 'currency item must be object';
     if (typeof c.name !== 'string') return 'currency.name must be string';
     if (typeof c.bonus !== 'number') return 'currency.bonus must be number';
-    if (c.shopName !== undefined && typeof c.shopName !== 'string')
-      return 'currency.shopName must be string';
   }
 
   if (!Array.isArray(s.stages) || s.stages.length !== 12) return 'stages must have length 12';
@@ -137,7 +163,7 @@ function validateState(s) {
   if (!Array.isArray(s.shopItems)) return 'shopItems must be an array';
   for (const it of s.shopItems) {
     if (!it || typeof it !== 'object') return 'shopItem must be object';
-    if (typeof it.currency !== 'string') return 'shopItem.currency must be string';
+    if (typeof it.currencyId !== 'number') return 'shopItem.currencyId must be number';
     if (typeof it.name !== 'string') return 'shopItem.name must be string';
     if (typeof it.price !== 'number') return 'shopItem.price must be number';
     if (typeof it.buyCount !== 'number') return 'shopItem.buyCount must be number';
@@ -164,5 +190,5 @@ function validateState(s) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { STAGE_AP, applyBonus, parseSumExpr, defaultState, buildModel, computeBalance, hasMinimumData, validateState, matchPresetItems };
+  module.exports = { STAGE_AP, applyBonus, parseSumExpr, defaultState, buildModel, computeBalance, hasMinimumData, validateState, matchPresetItems, allocateCurrencyId, normalizeCurrencyIds };
 }

@@ -26,6 +26,7 @@ function loadState() {
       s.presetItems = cloneDefaultPresetItems();
       return s;
     }
+    normalizeCurrencyIds(parsed);
     return parsed;
   } catch (e) {
     console.warn('Stored state parse failed:', e.message);
@@ -57,16 +58,16 @@ function renderResultSection() {
   const row = document.createElement('div');
   row.className = 'owned-row';
   row.appendChild(document.createTextNode('보유량:'));
-  state.currencies.filter(c => c.name).forEach(c => {
+  state.currencies.forEach(c => {
     const label = document.createElement('label');
-    label.textContent = c.name;
+    label.textContent = currencyLabel(c);
     const input = document.createElement('input');
     input.type = 'number';
     input.min = '0';
-    input.value = state.owned[c.name] ?? 0;
+    input.value = state.owned[c.id] ?? 0;
     input.addEventListener('blur', () => {
       const n = Number(input.value);
-      state.owned[c.name] = Number.isFinite(n) && n >= 0 ? n : 0;
+      state.owned[c.id] = Number.isFinite(n) && n >= 0 ? n : 0;
       afterValueEdit();
     });
     label.appendChild(input);
@@ -83,20 +84,19 @@ function renderCurrenciesSection() {
   table.innerHTML = '<thead><tr><th>재화</th><th>보너스 % <span class="info-icon">ⓘ<span class="info-tip">여러 보너스를 합칠 때 <code>25+15+15+15+25+15</code>처럼 <code>+</code>로 이어서 입력할 수 있습니다.</span></span></th><th></th></tr></thead>';
   const tbody = document.createElement('tbody');
 
-  state.currencies.forEach((c, idx) => {
+  state.currencies.forEach((c) => {
     const tr = document.createElement('tr');
-    tr.appendChild(makeTextCell(c.name, (v, input) => {
+    tr.appendChild(makeTextCell(c.name, (v) => {
       if (v === c.name) return;
-      if (v && state.currencies.some((cc, i) => i !== idx && cc.name === v)) {
-        alert('이미 같은 이름의 재화가 존재합니다: ' + v);
-        input.value = c.name;
-        return;
-      }
-      renameCurrency(idx, v);
-      afterValueEdit();
+      c.name = v;
+      saveState();
+      renderResultSection();
+      renderStagesSection();
+      renderShopsSection();
+      recompute();
     }, '이벤트 포인트, 벚꽃 찹쌀떡, etc...'));
     tr.appendChild(makeSumCell(c.bonus, v => { c.bonus = v; afterValueEdit(); }));
-    tr.appendChild(makeDeleteCell(() => { removeCurrency(idx); }));
+    tr.appendChild(makeDeleteCell(() => { removeCurrency(c.id); }));
     tbody.appendChild(tr);
   });
 
@@ -106,7 +106,11 @@ function renderCurrenciesSection() {
   const addBtn = document.createElement('button');
   addBtn.textContent = '+ 재화 추가';
   addBtn.addEventListener('click', () => {
-    state.currencies.push({ name: '', bonus: 0 });
+    state.currencies.push({
+      id: allocateCurrencyId(state.currencies),
+      name: '',
+      bonus: 0,
+    });
     afterEdit();
   });
   const row = document.createElement('div');
@@ -119,7 +123,7 @@ function renderStagesSection() {
   const container = document.getElementById('stages-container');
   container.innerHTML = '';
 
-  const currencyCols = state.currencies.filter(c => c.name);
+  const currencyCols = state.currencies;
 
   // 그룹 체크박스 행
   const toggleRow = document.createElement('div');
@@ -150,7 +154,7 @@ function renderStagesSection() {
   headRow.innerHTML = '<th>#</th><th>AP</th>';
   currencyCols.forEach(c => {
     const th = document.createElement('th');
-    th.textContent = c.name;
+    th.textContent = currencyLabel(c);
     headRow.appendChild(th);
   });
   thead.appendChild(headRow);
@@ -168,10 +172,10 @@ function renderStagesSection() {
     apTd.textContent = STAGE_AP[i];
     tr.appendChild(apTd);
     currencyCols.forEach(c => {
-      const value = state.stages[i].drops[c.name] ?? 0;
+      const value = state.stages[i].drops[c.id] ?? 0;
       tr.appendChild(makeNumCell(value, v => {
-        if (v) state.stages[i].drops[c.name] = v;
-        else delete state.stages[i].drops[c.name];
+        if (v) state.stages[i].drops[c.id] = v;
+        else delete state.stages[i].drops[c.id];
         afterValueEdit();
       }));
     });
@@ -185,7 +189,7 @@ function renderShopsSection() {
   const container = document.getElementById('shops-container');
   container.innerHTML = '';
 
-  const currencies = state.currencies.filter(c => c.name);
+  const currencies = state.currencies;
   if (currencies.length === 0) {
     container.innerHTML = '<div class="result-msg">재화를 먼저 추가하세요</div>';
     return;
@@ -195,7 +199,7 @@ function renderShopsSection() {
     const details = document.createElement('details');
     details.open = true;
     const summary = document.createElement('summary');
-    summary.textContent = `${c.name} 상점`;
+    summary.textContent = `${currencyLabel(c)} 상점`;
     details.appendChild(summary);
 
     const grid = document.createElement('div');
@@ -203,12 +207,12 @@ function renderShopsSection() {
 
     let itemCount = 0;
     state.shopItems.forEach((it, idx) => {
-      if (it.currency !== c.name) return;
+      if (it.currencyId !== c.id) return;
       itemCount++;
       grid.appendChild(makeShopItemCell(it, idx));
     });
 
-    grid.appendChild(makeShopAddCell(c.name));
+    grid.appendChild(makeShopAddCell(c.id));
 
     const used = itemCount + 1;
     const total = Math.ceil(used / 4) * 4;
@@ -411,33 +415,32 @@ function selectPresetItem(shopItemIdx, preset) {
   it.name = preset.name;
   it.price = preset.price;
   it.buyCount = preset.buyCount;
-  const currency = it.currency;
-  // afterEdit의 render()가 드롭다운을 잘라내기 전에 activeAutocomplete를 명시적으로 null로
+  const currencyId = it.currencyId;
   closeAutocomplete();
-  afterEdit();  // render 후 다음 셀 포커스
-  focusNextShopItemNameIn(currency, shopItemIdx);
+  afterEdit();
+  focusNextShopItemNameIn(currencyId, shopItemIdx);
 }
 
-function focusNextShopItemNameIn(currency, currentIdx) {
+function focusNextShopItemNameIn(currencyId, currentIdx) {
   const nextIdx = state.shopItems.findIndex(
-    (s, i) => i > currentIdx && s.currency === currency
+    (s, i) => i > currentIdx && s.currencyId === currencyId
   );
   if (nextIdx === -1) return;
   requestAnimationFrame(() => {
     const el = document.querySelector(
       '.item-name-input[data-shop-idx="' + nextIdx + '"]'
     );
-    if (el) el.focus();  // 기존 focusin 핸들러가 select() 처리
+    if (el) el.focus();
   });
 }
 
-function makeShopAddCell(currencyName) {
+function makeShopAddCell(currencyId) {
   const cell = document.createElement('div');
   cell.className = 'shop-cell shop-cell-add';
   const btn = document.createElement('button');
   btn.textContent = '+ 아이템 추가';
   btn.addEventListener('click', () => {
-    state.shopItems.push({ currency: currencyName, name: '', price: 0, buyCount: 0 });
+    state.shopItems.push({ currencyId, name: '', price: 0, buyCount: 0 });
     afterEdit();
   });
   cell.appendChild(btn);
@@ -450,7 +453,7 @@ function makeTextInput(value, onCommit, placeholder) {
   input.type = 'text';
   input.value = value ?? '';
   if (placeholder) input.placeholder = placeholder;
-  input.addEventListener('blur', () => onCommit(input.value, input));
+  input.addEventListener('input', () => onCommit(input.value, input));
   return input;
 }
 
@@ -528,31 +531,13 @@ function afterValueEdit() {
   recompute();
 }
 
-function renameCurrency(idx, newName) {
-  const old = state.currencies[idx].name;
-  if (newName === old) return;
-  state.currencies[idx].name = newName;
-  state.stages.forEach(stage => {
-    if (old in stage.drops) {
-      stage.drops[newName] = stage.drops[old];
-      delete stage.drops[old];
-    }
-  });
-  if (old in state.owned) {
-    state.owned[newName] = state.owned[old];
-    delete state.owned[old];
-  }
-  state.shopItems.forEach(it => {
-    if (it.currency === old) it.currency = newName;
-  });
-}
-
-function removeCurrency(idx) {
-  const name = state.currencies[idx].name;
-  state.currencies.splice(idx, 1);
-  state.stages.forEach(stage => { delete stage.drops[name]; });
-  delete state.owned[name];
-  state.shopItems = state.shopItems.filter(it => it.currency !== name);
+function removeCurrency(id) {
+  const i = state.currencies.findIndex(c => c.id === id);
+  if (i < 0) return;
+  state.currencies.splice(i, 1);
+  state.stages.forEach(stage => { delete stage.drops[id]; });
+  delete state.owned[id];
+  state.shopItems = state.shopItems.filter(it => it.currencyId !== id);
   afterEdit();
 }
 
@@ -605,7 +590,7 @@ function renderSolvedResult(container, solved) {
   stageTitle.textContent = '스테이지 권장 횟수';
   container.appendChild(stageTitle);
 
-  const activeCurrencies = state.currencies.filter(c => c.name);
+  const activeCurrencies = state.currencies;
   const stageTable = document.createElement('table');
   stageTable.className = 'stage-rec-table';
   const stageHead = document.createElement('thead');
@@ -613,7 +598,7 @@ function renderSolvedResult(container, solved) {
   stageHeadRow.innerHTML = '<th>#</th><th>AP</th><th>횟수</th>';
   activeCurrencies.forEach(c => {
     const th = document.createElement('th');
-    th.textContent = '+' + c.name;
+    th.textContent = '+' + currencyLabel(c);
     stageHeadRow.appendChild(th);
   });
   stageHead.appendChild(stageHeadRow);
@@ -626,7 +611,7 @@ function renderSolvedResult(container, solved) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>스테이지 ${i + 1}</td><td>${STAGE_AP[i]} ap</td><td>${runs} 번</td>`;
     activeCurrencies.forEach(c => {
-      const perRun = applyBonus(state.stages[i].drops[c.name] ?? 0, c.bonus);
+      const perRun = applyBonus(state.stages[i].drops[c.id] ?? 0, c.bonus);
       const td = document.createElement('td');
       td.textContent = perRun * runs;
       tr.appendChild(td);
@@ -655,12 +640,13 @@ function renderBalanceTable(container, solved) {
   balanceTable.innerHTML = '<thead><tr><th>재화</th><th>보유</th><th>필요</th><th>획득</th><th>잉여</th></tr></thead>';
   const balBody = document.createElement('tbody');
   const balance = computeBalance(state, solved);
-  state.currencies.filter(c => c.name).forEach(c => {
-    const b = balance[c.name];
+  state.currencies.forEach(c => {
+    const b = balance[c.id];
+    if (!b) return;
     const tr = document.createElement('tr');
     const surplusColor = b.surplus < 0 ? 'color:#c33' : '';
     tr.innerHTML =
-      `<td>${escapeHtml(c.name)}</td>` +
+      `<td>${escapeHtml(currencyLabel(c))}</td>` +
       `<td>${b.owned}</td>` +
       `<td>${b.needed}</td>` +
       `<td>+${b.gained}</td>` +
@@ -669,6 +655,10 @@ function renderBalanceTable(container, solved) {
   });
   balanceTable.appendChild(balBody);
   container.appendChild(balanceTable);
+}
+
+function currencyLabel(c) {
+  return c.name || '(이름 없음)';
 }
 
 function escapeHtml(s) {
@@ -703,6 +693,7 @@ function importJson(e) {
         alert('유효하지 않은 파일입니다: ' + err);
         return;
       }
+      normalizeCurrencyIds(parsed);
       state = parsed;
       saveState();
       render();

@@ -42,6 +42,13 @@
 
     // === TEST CASES (이후 태스크에서 추가) ===
 
+    // === Helpers for currency ID refactor ===
+    function addCurrency(state, name, bonus = 0) {
+      const id = allocateCurrencyId(state.currencies);
+      state.currencies.push({ id, name, bonus });
+      return id;
+    }
+
     test('disassemble: 완성형 문자열 자모 분해', () => {
       assertEqual(disassemble('가방'), 'ㄱㅏㅂㅏㅇ');
     });
@@ -147,9 +154,9 @@
 
     test('buildModel: 기본 최소화 목표는 AP', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 5;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 5;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const m = buildModel(s);
       assertEqual(m.optimize, 'AP');
       assertEqual(m.opType, 'min');
@@ -157,28 +164,28 @@
 
     test('buildModel: 스테이지 변수에 AP와 재화 드랍 포함', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 5;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 5;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const m = buildModel(s);
       assertApprox(m.variables.s1.AP, 10, 1e-4);
-      assertEqual(m.variables.s1['엔화'], 5);
+      assertEqual(m.variables.s1['c' + yen], 5);
     });
 
     test('buildModel: 보너스가 드랍에 적용됨', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 50, shopName: '' }];
-      s.stages[0].drops['엔화'] = 4;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화', 50);
+      s.stages[0].drops[yen] = 4;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const m = buildModel(s);
-      assertEqual(m.variables.s1['엔화'], 6);  // ceil(4 * 1.5)
+      assertEqual(m.variables.s1['c' + yen], 6);  // ceil(4 * 1.5)
     });
 
     test('buildModel: AP는 인덱스별 고정값', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      for (let i = 0; i < 12; i++) s.stages[i].drops['엔화'] = 1;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      for (let i = 0; i < 12; i++) s.stages[i].drops[yen] = 1;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const m = buildModel(s);
       assertApprox(m.variables.s1.AP, 10, 1e-4);
       assertApprox(m.variables.s5.AP, 15, 1e-4);
@@ -187,9 +194,9 @@
 
     test('buildModel: 비활성 그룹의 스테이지는 변수에서 제외', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      for (let i = 0; i < 12; i++) s.stages[i].drops['엔화'] = 1;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      for (let i = 0; i < 12; i++) s.stages[i].drops[yen] = 1;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       s.groupsEnabled = [true, false, false];
       const m = buildModel(s);
       assertTrue(m.variables.s1, 's1 should exist');
@@ -200,97 +207,136 @@
 
     test('buildModel: 제약은 필요량에서 보유량을 뺀 값', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 1;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 300, buyCount: 2 }];  // need=600
-      s.owned['엔화'] = 200;
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 1;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 300, buyCount: 2 }];
+      s.owned[yen] = 200;
       const m = buildModel(s);
-      assertEqual(m.constraints['엔화'], { min: 400 });
+      assertEqual(m.constraints['c' + yen], { min: 400 });
     });
 
     test('buildModel: 보유량이 필요량 이상이면 제약 제외', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 1;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
-      s.owned['엔화'] = 999;
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 1;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
+      s.owned[yen] = 999;
       const m = buildModel(s);
-      assertTrue(!('엔화' in m.constraints));
+      assertTrue(!(('c' + yen) in m.constraints));
     });
 
     test('buildModel: 모든 스테이지 변수는 ints에 표시', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      for (let i = 0; i < 12; i++) s.stages[i].drops['엔화'] = 1;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      for (let i = 0; i < 12; i++) s.stages[i].drops[yen] = 1;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const m = buildModel(s);
       for (let i = 1; i <= 12; i++) assertEqual(m.ints['s' + i], 1);
     });
 
-    test('buildModel: 빈 이름 재화는 무시', () => {
+    test('buildModel: 빈 이름 재화도 변수·제약에 포함', () => {
       const s = defaultState();
-      s.currencies = [{ name: '', bonus: 0, shopName: '' }, { name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 5;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 50, buyCount: 1 }];
+      const empty = addCurrency(s, '');
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[empty] = 3;
+      s.stages[0].drops[yen] = 5;
+      s.shopItems = [
+        { currencyId: empty, name: 'a', price: 30, buyCount: 1 },
+        { currencyId: yen, name: 'b', price: 50, buyCount: 1 },
+      ];
       const m = buildModel(s);
-      assertTrue(!('' in m.variables.s1));
-      assertEqual(m.variables.s1['엔화'], 5);
+      assertEqual(m.variables.s1['c' + empty], 3);
+      assertEqual(m.variables.s1['c' + yen], 5);
+      assertEqual(m.constraints['c' + empty], { min: 30 });
+      assertEqual(m.constraints['c' + yen], { min: 50 });
+    });
+
+    test('buildModel: 중복 이름 재화도 독립적으로 모델링', () => {
+      const s = defaultState();
+      const a = addCurrency(s, '포인트');
+      const b = addCurrency(s, '포인트');
+      s.stages[0].drops[a] = 4;
+      s.stages[0].drops[b] = 7;
+      s.shopItems = [
+        { currencyId: a, name: 'x', price: 20, buyCount: 1 },
+        { currencyId: b, name: 'y', price: 14, buyCount: 1 },
+      ];
+      const m = buildModel(s);
+      assertEqual(m.variables.s1['c' + a], 4);
+      assertEqual(m.variables.s1['c' + b], 7);
+      assertEqual(m.constraints['c' + a], { min: 20 });
+      assertEqual(m.constraints['c' + b], { min: 14 });
     });
 
     test('computeBalance: 단일 재화 단순 케이스', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 5;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 2 }];
-      s.owned['엔화'] = 50;
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 5;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 2 }];
+      s.owned[yen] = 50;
       const b = computeBalance(s, { s1: 40 });
-      assertEqual(b['엔화'], { owned: 50, gained: 200, needed: 200, surplus: 50 });
+      assertEqual(b[yen], { owned: 50, gained: 200, needed: 200, surplus: 50 });
     });
 
     test('computeBalance: 보너스 적용된 획득량', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 50, shopName: '' }];
-      s.stages[0].drops['엔화'] = 4;  // ceil(4*1.5) = 6
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 12, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화', 50);
+      s.stages[0].drops[yen] = 4;  // ceil(4*1.5) = 6
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 12, buyCount: 1 }];
       const b = computeBalance(s, { s1: 2 });
-      assertEqual(b['엔화'].gained, 12);  // 6 * 2
+      assertEqual(b[yen].gained, 12);  // 6 * 2
     });
 
     test('computeBalance: 여러 스테이지 합산', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 5;
-      s.stages[4].drops['엔화'] = 8;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 5;
+      s.stages[4].drops[yen] = 8;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const b = computeBalance(s, { s1: 3, s5: 10 });
-      assertEqual(b['엔화'].gained, 95);  // 5*3 + 8*10
+      assertEqual(b[yen].gained, 95);  // 5*3 + 8*10
     });
 
     test('computeBalance: 여러 재화', () => {
       const s = defaultState();
-      s.currencies = [
-        { name: '엔화', bonus: 0, shopName: '' },
-        { name: '달러', bonus: 0, shopName: '' },
-      ];
-      s.stages[0].drops['엔화'] = 5;
-      s.stages[0].drops['달러'] = 2;
+      const yen = addCurrency(s, '엔화');
+      const usd = addCurrency(s, '달러');
+      s.stages[0].drops[yen] = 5;
+      s.stages[0].drops[usd] = 2;
       s.shopItems = [
-        { currency: '엔화', name: 'a', price: 50, buyCount: 1 },
-        { currency: '달러', name: 'b', price: 20, buyCount: 2 },
+        { currencyId: yen, name: 'a', price: 50, buyCount: 1 },
+        { currencyId: usd, name: 'b', price: 20, buyCount: 2 },
       ];
       const b = computeBalance(s, { s1: 10 });
-      assertEqual(b['엔화'], { owned: 0, gained: 50, needed: 50, surplus: 0 });
-      assertEqual(b['달러'], { owned: 0, gained: 20, needed: 40, surplus: -20 });
+      assertEqual(b[yen], { owned: 0, gained: 50, needed: 50, surplus: 0 });
+      assertEqual(b[usd], { owned: 0, gained: 20, needed: 40, surplus: -20 });
     });
 
     test('computeBalance: 비활성 그룹은 획득량에 기여하지 않음', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[4].drops['엔화'] = 10;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.stages[4].drops[yen] = 10;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       s.groupsEnabled = [true, false, true];
-      const b = computeBalance(s, { s5: 3 });  // solver에서 올 수 없지만 방어적 처리 확인
-      assertEqual(b['엔화'].gained, 0);
+      const b = computeBalance(s, { s5: 3 });
+      assertEqual(b[yen].gained, 0);
+    });
+
+    test('E2E: 중복 이름 재화도 solver + balance가 독립 계산', () => {
+      const s = defaultState();
+      const a = addCurrency(s, '포인트');
+      const b = addCurrency(s, '포인트');
+      s.stages[0].drops[a] = 5;
+      s.stages[0].drops[b] = 3;
+      s.shopItems = [
+        { currencyId: a, name: 'x', price: 10, buyCount: 1 },
+        { currencyId: b, name: 'y', price: 6, buyCount: 1 },
+      ];
+      const solved = solver.Solve(buildModel(s));
+      assertTrue(solved.feasible, 'solver should find a solution');
+      const bal = computeBalance(s, solved);
+      assertTrue(bal[a].surplus >= 0, 'currency a must meet its target');
+      assertTrue(bal[b].surplus >= 0, 'currency b must meet its target');
     });
 
     test('hasMinimumData: 빈 state는 false', () => {
@@ -299,44 +345,44 @@
 
     test('hasMinimumData: 재화만 있으면 false (상점 아이템 없음)', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
+      addCurrency(s, '엔화');
       assertEqual(hasMinimumData(s), false);
     });
 
     test('hasMinimumData: 재화 + 유효 아이템 있으면 true', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       assertEqual(hasMinimumData(s), true);
     });
 
     test('hasMinimumData: buyCount=0 인 아이템만 있으면 false', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 0 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 0 }];
       assertEqual(hasMinimumData(s), false);
     });
 
     test('hasMinimumData: price=0 인 아이템만 있으면 false', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 0, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 0, buyCount: 1 }];
       assertEqual(hasMinimumData(s), false);
     });
 
     test('hasMinimumData: 모든 그룹 비활성이면 false', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       s.groupsEnabled = [false, false, false];
       assertEqual(hasMinimumData(s), false);
     });
 
-    test('hasMinimumData: 빈 이름 재화는 카운트하지 않음', () => {
+    test('hasMinimumData: 빈 이름 재화도 카운트함', () => {
       const s = defaultState();
-      s.currencies = [{ name: '', bonus: 0, shopName: '' }];
-      s.shopItems = [{ currency: '', name: 'x', price: 100, buyCount: 1 }];
-      assertEqual(hasMinimumData(s), false);
+      const empty = addCurrency(s, '');
+      s.shopItems = [{ currencyId: empty, name: 'x', price: 100, buyCount: 1 }];
+      assertEqual(hasMinimumData(s), true);
     });
 
     test('validateState: 유효한 기본 state', () => {
@@ -364,7 +410,7 @@
 
     test('validateState: shopItems 필드 누락 거부', () => {
       const s = defaultState();
-      s.shopItems = [{ currency: '엔화', name: 'x' }];  // price/buyCount 누락
+      s.shopItems = [{ currencyId: 1, name: 'x' }];  // price/buyCount 누락
       assertTrue(validateState(s) !== null);
     });
 
@@ -378,10 +424,37 @@
       assertTrue(validateState(s) !== null);
     });
 
-    test('validateState: currencies 내부 필드 타입 검증', () => {
+    test('validateState: currency.bonus가 숫자 아니면 거부', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 'oops', shopName: '' }];
+      s.currencies = [{ id: 1, name: '엔화', bonus: 'oops' }];
       assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: currency.name이 문자열 아니면 거부', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: 123, bonus: 0 }];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: shopItem.currencyId가 숫자 아니면 거부', () => {
+      const s = defaultState();
+      s.shopItems = [{ currencyId: '1', name: 'x', price: 10, buyCount: 1 }];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: 빈 이름 currency 통과', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '', bonus: 0 }];
+      assertEqual(validateState(s), null);
+    });
+
+    test('validateState: 중복 이름 currency 통과', () => {
+      const s = defaultState();
+      s.currencies = [
+        { id: 1, name: '엔화', bonus: 0 },
+        { id: 2, name: '엔화', bonus: 10 },
+      ];
+      assertEqual(validateState(s), null);
     });
 
     test('defaultState: 빈 presetItems', () => {
@@ -505,6 +578,86 @@
         { name: '상급 기술노트', price: 400, buyCount: 2 },
       ];
       assertEqual(matchPresetItems('일반', items).map(i => i.name), ['일반 기술노트']);
+    });
+
+    test('allocateCurrencyId: 빈 배열은 1 반환', () => {
+      assertEqual(allocateCurrencyId([]), 1);
+    });
+
+    test('allocateCurrencyId: 연속 ID는 최대+1', () => {
+      assertEqual(allocateCurrencyId([{ id: 1 }, { id: 2 }, { id: 3 }]), 4);
+    });
+
+    test('allocateCurrencyId: 중간 빈 자리를 채움', () => {
+      assertEqual(allocateCurrencyId([{ id: 1 }, { id: 3 }]), 2);
+    });
+
+    test('allocateCurrencyId: 1이 비어있으면 1 반환', () => {
+      assertEqual(allocateCurrencyId([{ id: 2 }]), 1);
+    });
+
+    test('allocateCurrencyId: 여러 빈 자리 중 가장 작은 것', () => {
+      assertEqual(allocateCurrencyId([{ id: 2 }, { id: 4 }, { id: 5 }]), 1);
+    });
+
+    test('normalizeCurrencyIds: id 누락된 currency에 id 부여', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0 }];
+      normalizeCurrencyIds(s);
+      assertEqual(s.currencies[0].id, 1);
+    });
+
+    test('normalizeCurrencyIds: 중복 id 있으면 한쪽 재부여', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: 'a', bonus: 0 }, { id: 1, name: 'b', bonus: 0 }];
+      normalizeCurrencyIds(s);
+      assertTrue(s.currencies[0].id !== s.currencies[1].id);
+    });
+
+    test('normalizeCurrencyIds: dangling shopItem.currencyId 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.shopItems = [
+        { currencyId: 1, name: 'a', price: 10, buyCount: 1 },
+        { currencyId: 99, name: 'orphan', price: 10, buyCount: 1 },
+      ];
+      normalizeCurrencyIds(s);
+      assertEqual(s.shopItems.length, 1);
+      assertEqual(s.shopItems[0].name, 'a');
+    });
+
+    test('normalizeCurrencyIds: dangling drops 키 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.stages[0].drops = { 1: 5, 99: 10 };
+      normalizeCurrencyIds(s);
+      assertEqual(s.stages[0].drops, { 1: 5 });
+    });
+
+    test('normalizeCurrencyIds: dangling owned 키 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.owned = { 1: 100, 99: 50 };
+      normalizeCurrencyIds(s);
+      assertEqual(s.owned, { 1: 100 });
+    });
+
+    test('normalizeCurrencyIds: 기존 유효 id는 유지', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 7, name: 'a', bonus: 0 }, { id: 2, name: 'b', bonus: 0 }];
+      normalizeCurrencyIds(s);
+      assertEqual(s.currencies[0].id, 7);
+      assertEqual(s.currencies[1].id, 2);
+    });
+
+    test('normalizeCurrencyIds: 구버전 name-key drops/owned 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.stages[0].drops = { '엔화': 100, 1: 50 };
+      s.owned = { '엔화': 200, 1: 30 };
+      normalizeCurrencyIds(s);
+      assertEqual(s.stages[0].drops, { 1: 50 });
+      assertEqual(s.owned, { 1: 30 });
     });
 
     // === RENDER ===
