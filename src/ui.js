@@ -671,6 +671,10 @@ function renderBalanceTable(container, solved) {
   container.appendChild(balanceTable);
 }
 
+function currencyLabel(c) {
+  return c.name || '(이름 없음)';
+}
+
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
