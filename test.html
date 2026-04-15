@@ -534,6 +534,48 @@
       assertEqual(allocateCurrencyId([{ id: 2 }, { id: 4 }, { id: 5 }]), 1);
     });
 
+    test('normalizeCurrencyIds: id 누락된 currency에 id 부여', () => {
+      const s = defaultState();
+      s.currencies = [{ name: '엔화', bonus: 0 }];
+      normalizeCurrencyIds(s);
+      assertEqual(s.currencies[0].id, 1);
+    });
+
+    test('normalizeCurrencyIds: 중복 id 있으면 한쪽 재부여', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: 'a', bonus: 0 }, { id: 1, name: 'b', bonus: 0 }];
+      normalizeCurrencyIds(s);
+      assertTrue(s.currencies[0].id !== s.currencies[1].id);
+    });
+
+    test('normalizeCurrencyIds: dangling shopItem.currencyId 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.shopItems = [
+        { currencyId: 1, name: 'a', price: 10, buyCount: 1 },
+        { currencyId: 99, name: 'orphan', price: 10, buyCount: 1 },
+      ];
+      normalizeCurrencyIds(s);
+      assertEqual(s.shopItems.length, 1);
+      assertEqual(s.shopItems[0].name, 'a');
+    });
+
+    test('normalizeCurrencyIds: dangling drops 키 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.stages[0].drops = { 1: 5, 99: 10 };
+      normalizeCurrencyIds(s);
+      assertEqual(s.stages[0].drops, { 1: 5 });
+    });
+
+    test('normalizeCurrencyIds: dangling owned 키 제거', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '엔화', bonus: 0 }];
+      s.owned = { 1: 100, 99: 50 };
+      normalizeCurrencyIds(s);
+      assertEqual(s.owned, { 1: 100 });
+    });
+
     // === RENDER ===
     const out = document.getElementById('out');
     let passed = 0, failed = 0;

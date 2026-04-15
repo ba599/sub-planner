@@ -26,6 +26,30 @@ function allocateCurrencyId(currencies) {
   }
 }
 
+function normalizeCurrencyIds(state) {
+  const used = new Set();
+  state.currencies.forEach(c => {
+    if (typeof c.id !== 'number' || !Number.isInteger(c.id) || c.id < 1 || used.has(c.id)) {
+      const temp = [];
+      used.forEach(id => temp.push({ id }));
+      c.id = allocateCurrencyId(temp);
+    }
+    used.add(c.id);
+  });
+
+  state.shopItems = state.shopItems.filter(it => used.has(it.currencyId));
+
+  state.stages.forEach(stage => {
+    Object.keys(stage.drops).forEach(key => {
+      if (!used.has(Number(key))) delete stage.drops[key];
+    });
+  });
+
+  Object.keys(state.owned).forEach(key => {
+    if (!used.has(Number(key))) delete state.owned[key];
+  });
+}
+
 function defaultState() {
   return {
     currencies: [],
@@ -171,5 +195,5 @@ function validateState(s) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { STAGE_AP, applyBonus, parseSumExpr, defaultState, buildModel, computeBalance, hasMinimumData, validateState, matchPresetItems, allocateCurrencyId };
+  module.exports = { STAGE_AP, applyBonus, parseSumExpr, defaultState, buildModel, computeBalance, hasMinimumData, validateState, matchPresetItems, allocateCurrencyId, normalizeCurrencyIds };
 }
