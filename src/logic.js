@@ -19,6 +19,13 @@ function parseSumExpr(text) {
   return total;
 }
 
+function allocateCurrencyId(currencies) {
+  const used = new Set(currencies.map(c => c.id));
+  for (let i = 1; ; i++) {
+    if (!used.has(i)) return i;
+  }
+}
+
 function defaultState() {
   return {
     currencies: [],
@@ -164,5 +171,5 @@ function validateState(s) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { STAGE_AP, applyBonus, parseSumExpr, defaultState, buildModel, computeBalance, hasMinimumData, validateState, matchPresetItems };
+  module.exports = { STAGE_AP, applyBonus, parseSumExpr, defaultState, buildModel, computeBalance, hasMinimumData, validateState, matchPresetItems, allocateCurrencyId };
 }

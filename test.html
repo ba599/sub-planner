@@ -42,6 +42,13 @@
 
     // === TEST CASES (이후 태스크에서 추가) ===
 
+    // === Helpers for currency ID refactor ===
+    function addCurrency(state, name, bonus = 0) {
+      const id = allocateCurrencyId(state.currencies);
+      state.currencies.push({ id, name, bonus });
+      return id;
+    }
+
     test('disassemble: 완성형 문자열 자모 분해', () => {
       assertEqual(disassemble('가방'), 'ㄱㅏㅂㅏㅇ');
     });
@@ -505,6 +512,26 @@
         { name: '상급 기술노트', price: 400, buyCount: 2 },
       ];
       assertEqual(matchPresetItems('일반', items).map(i => i.name), ['일반 기술노트']);
+    });
+
+    test('allocateCurrencyId: 빈 배열은 1 반환', () => {
+      assertEqual(allocateCurrencyId([]), 1);
+    });
+
+    test('allocateCurrencyId: 연속 ID는 최대+1', () => {
+      assertEqual(allocateCurrencyId([{ id: 1 }, { id: 2 }, { id: 3 }]), 4);
+    });
+
+    test('allocateCurrencyId: 중간 빈 자리를 채움', () => {
+      assertEqual(allocateCurrencyId([{ id: 1 }, { id: 3 }]), 2);
+    });
+
+    test('allocateCurrencyId: 1이 비어있으면 1 반환', () => {
+      assertEqual(allocateCurrencyId([{ id: 2 }]), 1);
+    });
+
+    test('allocateCurrencyId: 여러 빈 자리 중 가장 작은 것', () => {
+      assertEqual(allocateCurrencyId([{ id: 2 }, { id: 4 }, { id: 5 }]), 1);
     });
 
     // === RENDER ===
