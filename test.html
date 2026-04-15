@@ -247,6 +247,8 @@
       const m = buildModel(s);
       assertEqual(m.variables.s1['c' + empty], 3);
       assertEqual(m.variables.s1['c' + yen], 5);
+      assertEqual(m.constraints['c' + empty], { min: 30 });
+      assertEqual(m.constraints['c' + yen], { min: 50 });
     });
 
     test('buildModel: 중복 이름 재화도 독립적으로 모델링', () => {
@@ -262,6 +264,8 @@
       const m = buildModel(s);
       assertEqual(m.variables.s1['c' + a], 4);
       assertEqual(m.variables.s1['c' + b], 7);
+      assertEqual(m.constraints['c' + a], { min: 20 });
+      assertEqual(m.constraints['c' + b], { min: 14 });
     });
 
     test('computeBalance: 단일 재화 단순 케이스', () => {
