@@ -189,7 +189,7 @@ function renderShopsSection() {
   const container = document.getElementById('shops-container');
   container.innerHTML = '';
 
-  const currencies = state.currencies.filter(c => c.name);
+  const currencies = state.currencies;
   if (currencies.length === 0) {
     container.innerHTML = '<div class="result-msg">재화를 먼저 추가하세요</div>';
     return;
@@ -199,7 +199,7 @@ function renderShopsSection() {
     const details = document.createElement('details');
     details.open = true;
     const summary = document.createElement('summary');
-    summary.textContent = `${c.name} 상점`;
+    summary.textContent = `${currencyLabel(c)} 상점`;
     details.appendChild(summary);
 
     const grid = document.createElement('div');
@@ -207,12 +207,12 @@ function renderShopsSection() {
 
     let itemCount = 0;
     state.shopItems.forEach((it, idx) => {
-      if (it.currency !== c.name) return;
+      if (it.currencyId !== c.id) return;
       itemCount++;
       grid.appendChild(makeShopItemCell(it, idx));
     });
 
-    grid.appendChild(makeShopAddCell(c.name));
+    grid.appendChild(makeShopAddCell(c.id));
 
     const used = itemCount + 1;
     const total = Math.ceil(used / 4) * 4;
@@ -415,33 +415,32 @@ function selectPresetItem(shopItemIdx, preset) {
   it.name = preset.name;
   it.price = preset.price;
   it.buyCount = preset.buyCount;
-  const currency = it.currency;
-  // afterEdit의 render()가 드롭다운을 잘라내기 전에 activeAutocomplete를 명시적으로 null로
+  const currencyId = it.currencyId;
   closeAutocomplete();
-  afterEdit();  // render 후 다음 셀 포커스
-  focusNextShopItemNameIn(currency, shopItemIdx);
+  afterEdit();
+  focusNextShopItemNameIn(currencyId, shopItemIdx);
 }
 
-function focusNextShopItemNameIn(currency, currentIdx) {
+function focusNextShopItemNameIn(currencyId, currentIdx) {
   const nextIdx = state.shopItems.findIndex(
-    (s, i) => i > currentIdx && s.currency === currency
+    (s, i) => i > currentIdx && s.currencyId === currencyId
   );
   if (nextIdx === -1) return;
   requestAnimationFrame(() => {
     const el = document.querySelector(
       '.item-name-input[data-shop-idx="' + nextIdx + '"]'
     );
-    if (el) el.focus();  // 기존 focusin 핸들러가 select() 처리
+    if (el) el.focus();
   });
 }
 
-function makeShopAddCell(currencyName) {
+function makeShopAddCell(currencyId) {
   const cell = document.createElement('div');
   cell.className = 'shop-cell shop-cell-add';
   const btn = document.createElement('button');
   btn.textContent = '+ 아이템 추가';
   btn.addEventListener('click', () => {
-    state.shopItems.push({ currency: currencyName, name: '', price: 0, buyCount: 0 });
+    state.shopItems.push({ currencyId, name: '', price: 0, buyCount: 0 });
     afterEdit();
   });
   cell.appendChild(btn);
