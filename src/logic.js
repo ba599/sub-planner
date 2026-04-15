@@ -154,8 +154,6 @@ function validateState(s) {
     if (!c || typeof c !== 'object') return 'currency item must be object';
     if (typeof c.name !== 'string') return 'currency.name must be string';
     if (typeof c.bonus !== 'number') return 'currency.bonus must be number';
-    if (c.shopName !== undefined && typeof c.shopName !== 'string')
-      return 'currency.shopName must be string';
   }
 
   if (!Array.isArray(s.stages) || s.stages.length !== 12) return 'stages must have length 12';
@@ -168,7 +166,7 @@ function validateState(s) {
   if (!Array.isArray(s.shopItems)) return 'shopItems must be an array';
   for (const it of s.shopItems) {
     if (!it || typeof it !== 'object') return 'shopItem must be object';
-    if (typeof it.currency !== 'string') return 'shopItem.currency must be string';
+    if (typeof it.currencyId !== 'number') return 'shopItem.currencyId must be number';
     if (typeof it.name !== 'string') return 'shopItem.name must be string';
     if (typeof it.price !== 'number') return 'shopItem.price must be number';
     if (typeof it.buyCount !== 'number') return 'shopItem.buyCount must be number';

@@ -371,7 +371,7 @@
 
     test('validateState: shopItems 필드 누락 거부', () => {
       const s = defaultState();
-      s.shopItems = [{ currency: '엔화', name: 'x' }];  // price/buyCount 누락
+      s.shopItems = [{ currencyId: 1, name: 'x' }];  // price/buyCount 누락
       assertTrue(validateState(s) !== null);
     });
 
@@ -385,10 +385,37 @@
       assertTrue(validateState(s) !== null);
     });
 
-    test('validateState: currencies 내부 필드 타입 검증', () => {
+    test('validateState: currency.bonus가 숫자 아니면 거부', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 'oops', shopName: '' }];
+      s.currencies = [{ id: 1, name: '엔화', bonus: 'oops' }];
       assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: currency.name이 문자열 아니면 거부', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: 123, bonus: 0 }];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: shopItem.currencyId가 숫자 아니면 거부', () => {
+      const s = defaultState();
+      s.shopItems = [{ currencyId: '1', name: 'x', price: 10, buyCount: 1 }];
+      assertTrue(validateState(s) !== null);
+    });
+
+    test('validateState: 빈 이름 currency 통과', () => {
+      const s = defaultState();
+      s.currencies = [{ id: 1, name: '', bonus: 0 }];
+      assertEqual(validateState(s), null);
+    });
+
+    test('validateState: 중복 이름 currency 통과', () => {
+      const s = defaultState();
+      s.currencies = [
+        { id: 1, name: '엔화', bonus: 0 },
+        { id: 2, name: '엔화', bonus: 10 },
+      ];
+      assertEqual(validateState(s), null);
     });
 
     test('defaultState: 빈 presetItems', () => {
