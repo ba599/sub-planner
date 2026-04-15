@@ -270,58 +270,56 @@
 
     test('computeBalance: 단일 재화 단순 케이스', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 5;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 2 }];
-      s.owned['엔화'] = 50;
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 5;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 2 }];
+      s.owned[yen] = 50;
       const b = computeBalance(s, { s1: 40 });
-      assertEqual(b['엔화'], { owned: 50, gained: 200, needed: 200, surplus: 50 });
+      assertEqual(b[yen], { owned: 50, gained: 200, needed: 200, surplus: 50 });
     });
 
     test('computeBalance: 보너스 적용된 획득량', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 50, shopName: '' }];
-      s.stages[0].drops['엔화'] = 4;  // ceil(4*1.5) = 6
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 12, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화', 50);
+      s.stages[0].drops[yen] = 4;  // ceil(4*1.5) = 6
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 12, buyCount: 1 }];
       const b = computeBalance(s, { s1: 2 });
-      assertEqual(b['엔화'].gained, 12);  // 6 * 2
+      assertEqual(b[yen].gained, 12);  // 6 * 2
     });
 
     test('computeBalance: 여러 스테이지 합산', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[0].drops['엔화'] = 5;
-      s.stages[4].drops['엔화'] = 8;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.stages[0].drops[yen] = 5;
+      s.stages[4].drops[yen] = 8;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const b = computeBalance(s, { s1: 3, s5: 10 });
-      assertEqual(b['엔화'].gained, 95);  // 5*3 + 8*10
+      assertEqual(b[yen].gained, 95);  // 5*3 + 8*10
     });
 
     test('computeBalance: 여러 재화', () => {
       const s = defaultState();
-      s.currencies = [
-        { name: '엔화', bonus: 0, shopName: '' },
-        { name: '달러', bonus: 0, shopName: '' },
-      ];
-      s.stages[0].drops['엔화'] = 5;
-      s.stages[0].drops['달러'] = 2;
+      const yen = addCurrency(s, '엔화');
+      const usd = addCurrency(s, '달러');
+      s.stages[0].drops[yen] = 5;
+      s.stages[0].drops[usd] = 2;
       s.shopItems = [
-        { currency: '엔화', name: 'a', price: 50, buyCount: 1 },
-        { currency: '달러', name: 'b', price: 20, buyCount: 2 },
+        { currencyId: yen, name: 'a', price: 50, buyCount: 1 },
+        { currencyId: usd, name: 'b', price: 20, buyCount: 2 },
       ];
       const b = computeBalance(s, { s1: 10 });
-      assertEqual(b['엔화'], { owned: 0, gained: 50, needed: 50, surplus: 0 });
-      assertEqual(b['달러'], { owned: 0, gained: 20, needed: 40, surplus: -20 });
+      assertEqual(b[yen], { owned: 0, gained: 50, needed: 50, surplus: 0 });
+      assertEqual(b[usd], { owned: 0, gained: 20, needed: 40, surplus: -20 });
     });
 
     test('computeBalance: 비활성 그룹은 획득량에 기여하지 않음', () => {
       const s = defaultState();
-      s.currencies = [{ name: '엔화', bonus: 0, shopName: '' }];
-      s.stages[4].drops['엔화'] = 10;
-      s.shopItems = [{ currency: '엔화', name: 'x', price: 100, buyCount: 1 }];
+      const yen = addCurrency(s, '엔화');
+      s.stages[4].drops[yen] = 10;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       s.groupsEnabled = [true, false, true];
-      const b = computeBalance(s, { s5: 3 });  // solver에서 올 수 없지만 방어적 처리 확인
-      assertEqual(b['엔화'].gained, 0);
+      const b = computeBalance(s, { s5: 3 });
+      assertEqual(b[yen].gained, 0);
     });
 
     test('hasMinimumData: 빈 state는 false', () => {

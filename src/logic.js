@@ -97,10 +97,9 @@ function buildModel(state) {
 function computeBalance(state, solverResult) {
   const result = {};
   state.currencies.forEach(c => {
-    if (!c.name) return;
-    const owned = state.owned[c.name] ?? 0;
+    const owned = state.owned[c.id] ?? 0;
     const needed = state.shopItems
-      .filter(it => it.currency === c.name)
+      .filter(it => it.currencyId === c.id)
       .reduce((sum, it) => sum + (it.price || 0) * (it.buyCount || 0), 0);
     let gained = 0;
     state.stages.forEach((stage, i) => {
@@ -108,10 +107,10 @@ function computeBalance(state, solverResult) {
       if (!state.groupsEnabled[group]) return;
       const runs = solverResult['s' + (i + 1)] ?? 0;
       if (!runs) return;
-      const perRun = applyBonus(stage.drops[c.name] ?? 0, c.bonus);
+      const perRun = applyBonus(stage.drops[c.id] ?? 0, c.bonus);
       gained += perRun * runs;
     });
-    result[c.name] = { owned, gained, needed, surplus: owned + gained - needed };
+    result[c.id] = { owned, gained, needed, surplus: owned + gained - needed };
   });
   return result;
 }
