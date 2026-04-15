@@ -590,7 +590,7 @@ function renderSolvedResult(container, solved) {
   stageTitle.textContent = '스테이지 권장 횟수';
   container.appendChild(stageTitle);
 
-  const activeCurrencies = state.currencies.filter(c => c.name);
+  const activeCurrencies = state.currencies;
   const stageTable = document.createElement('table');
   stageTable.className = 'stage-rec-table';
   const stageHead = document.createElement('thead');
@@ -598,7 +598,7 @@ function renderSolvedResult(container, solved) {
   stageHeadRow.innerHTML = '<th>#</th><th>AP</th><th>횟수</th>';
   activeCurrencies.forEach(c => {
     const th = document.createElement('th');
-    th.textContent = '+' + c.name;
+    th.textContent = '+' + currencyLabel(c);
     stageHeadRow.appendChild(th);
   });
   stageHead.appendChild(stageHeadRow);
@@ -611,7 +611,7 @@ function renderSolvedResult(container, solved) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>스테이지 ${i + 1}</td><td>${STAGE_AP[i]} ap</td><td>${runs} 번</td>`;
     activeCurrencies.forEach(c => {
-      const perRun = applyBonus(state.stages[i].drops[c.name] ?? 0, c.bonus);
+      const perRun = applyBonus(state.stages[i].drops[c.id] ?? 0, c.bonus);
       const td = document.createElement('td');
       td.textContent = perRun * runs;
       tr.appendChild(td);
@@ -640,12 +640,13 @@ function renderBalanceTable(container, solved) {
   balanceTable.innerHTML = '<thead><tr><th>재화</th><th>보유</th><th>필요</th><th>획득</th><th>잉여</th></tr></thead>';
   const balBody = document.createElement('tbody');
   const balance = computeBalance(state, solved);
-  state.currencies.filter(c => c.name).forEach(c => {
-    const b = balance[c.name];
+  state.currencies.forEach(c => {
+    const b = balance[c.id];
+    if (!b) return;
     const tr = document.createElement('tr');
     const surplusColor = b.surplus < 0 ? 'color:#c33' : '';
     tr.innerHTML =
-      `<td>${escapeHtml(c.name)}</td>` +
+      `<td>${escapeHtml(currencyLabel(c))}</td>` +
       `<td>${b.owned}</td>` +
       `<td>${b.needed}</td>` +
       `<td>+${b.gained}</td>` +
