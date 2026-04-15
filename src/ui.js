@@ -26,6 +26,7 @@ function loadState() {
       s.presetItems = cloneDefaultPresetItems();
       return s;
     }
+    normalizeCurrencyIds(parsed);
     return parsed;
   } catch (e) {
     console.warn('Stored state parse failed:', e.message);
@@ -702,6 +703,7 @@ function importJson(e) {
         alert('유효하지 않은 파일입니다: ' + err);
         return;
       }
+      normalizeCurrencyIds(parsed);
       state = parsed;
       saveState();
       render();
