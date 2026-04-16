@@ -1,4 +1,10 @@
-// Extracted from es-hangul (MIT License). https://github.com/toss/es-hangul
+// Portions of this file are extracted and adapted from es-hangul.
+// https://github.com/toss/es-hangul
+//
+// Copyright (c) 2024 Viva Republica, Inc
+// Licensed under the MIT License. See LICENSE at the project root for
+// the full license text.
+//
 // Only `disassemble` and `getChoseong` are exposed as globals;
 // internal helpers are file-scoped inside the IIFE.
 (function (global) {
