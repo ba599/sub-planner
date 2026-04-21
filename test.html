@@ -225,13 +225,31 @@
       assertTrue(!(('c' + yen) in m.constraints));
     });
 
-    test('buildModel: 모든 스테이지 변수는 ints에 표시', () => {
+    test('buildModel: LP-only 모드 (ints 미선언)', () => {
+      // LP-only: branch-and-cut 회피. 솔버가 정수 제약을 걸지 않도록
+      // ints 키를 아예 두지 않는다.
       const s = defaultState();
       const yen = addCurrency(s, '엔화');
       for (let i = 0; i < 12; i++) s.stages[i].drops[yen] = 1;
       s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
       const m = buildModel(s);
-      for (let i = 1; i <= 12; i++) assertEqual(m.ints['s' + i], 1);
+      assertTrue(!('ints' in m), 'ints should not be declared');
+    });
+
+    test('buildModel: 그룹 단위 tiebreaker 가 뒷그룹에 더 큰 할인', () => {
+      // 같은 AP 그룹이면 동일 perturbation, 뒷그룹일수록 기저 AP 에서 더 크게 깎음.
+      const s = defaultState();
+      const yen = addCurrency(s, '엔화');
+      for (let i = 0; i < 12; i++) s.stages[i].drops[yen] = 1;
+      s.shopItems = [{ currencyId: yen, name: 'x', price: 100, buyCount: 1 }];
+      const m = buildModel(s);
+      assertEqual(m.variables.s1.AP, m.variables.s2.AP);  // same group
+      assertEqual(m.variables.s5.AP, m.variables.s8.AP);  // same group
+      const cut1 = 10 - m.variables.s1.AP;   // group 1: cut ≈ 0
+      const cut2 = 15 - m.variables.s5.AP;   // group 2: cut ≈ 1 × TIE_EPSILON
+      const cut3 = 20 - m.variables.s9.AP;   // group 3: cut ≈ 2 × TIE_EPSILON
+      assertTrue(cut1 < cut2, 'group 2 가 group 1 보다 더 깎여야');
+      assertTrue(cut2 < cut3, 'group 3 가 group 2 보다 더 깎여야');
     });
 
     test('buildModel: 빈 이름 재화도 변수·제약에 포함', () => {
@@ -334,9 +352,66 @@
       ];
       const solved = solver.Solve(buildModel(s));
       assertTrue(solved.feasible, 'solver should find a solution');
+      // LP returns fractional runs — ceil to match ui.js 렌더 동작
+      for (let i = 0; i < 12; i++) {
+        const k = 's' + (i + 1);
+        if (solved[k]) solved[k] = Math.ceil(solved[k] - 1e-9);
+      }
       const bal = computeBalance(s, solved);
       assertTrue(bal[a].surplus >= 0, 'currency a must meet its target');
       assertTrue(bal[b].surplus >= 0, 'currency b must meet its target');
+    });
+
+    test('E2E: 그룹 단위 tiebreaker — 동점 시 뒷그룹 스테이지 선호', () => {
+      // c1 ratio 를 모든 그룹에서 동일 (1 c1 / 1 AP) 로 만들어 순수 LP 동점 생성.
+      // tiebreaker 가 s9 (group 3) 을 고르는지 검증.
+      const s = defaultState();
+      const c1 = addCurrency(s, 'c1');
+      s.stages[0].drops[c1] = 10;  // stage 1, AP 10 → 1 c1/AP
+      s.stages[4].drops[c1] = 15;  // stage 5, AP 15 → 1 c1/AP
+      s.stages[8].drops[c1] = 20;  // stage 9, AP 20 → 1 c1/AP
+      s.shopItems = [{ currencyId: c1, name: 'x', price: 100, buyCount: 1 }];
+      const solved = solver.Solve(buildModel(s));
+      assertTrue(solved.feasible, 'solver should find a solution');
+      // s9 이 선택되어야 하고 s1/s5 는 미사용
+      assertTrue((solved.s9 ?? 0) > 0, 's9 should be used (last group priority)');
+      assertTrue((solved.s1 ?? 0) < 1e-6, 's1 should not be used');
+      assertTrue((solved.s5 ?? 0) < 1e-6, 's5 should not be used');
+    });
+
+    test('E2E: 무거운 실제 state 도 빠르게 수렴 (regression)', () => {
+      // 사용자 보고 (4 재화 × 여러 상점 아이템) 시나리오.
+      // 이전엔 TIE_EPSILON + ints 조합으로 branch-and-cut 이 무한 루프에 빠졌음.
+      // LP-only 로 전환한 뒤 1초 이내에 끝나야 한다.
+      const s = defaultState();
+      const c1 = addCurrency(s, '티켓', 100);
+      const c2 = addCurrency(s, '팬라이트', 100);
+      const c3 = addCurrency(s, '케이크', 95);
+      const c4 = addCurrency(s, '이벤트P', 100);
+      const drops = [
+        [[c1,11],[c4,9]], [[c2,11],[c4,9]], [[c3,11],[c4,9]],
+        [[c1,1],[c2,1],[c3,1],[c4,17]],
+        [[c1,24],[c4,6]], [[c2,24],[c4,6]], [[c3,24],[c4,6]],
+        [[c1,1],[c2,1],[c3,1],[c4,27]],
+        [[c1,37],[c4,3]], [[c2,37],[c4,3]], [[c3,37],[c4,3]],
+        [[c4,40]],
+      ];
+      drops.forEach((pairs, i) => pairs.forEach(([id, v]) => { s.stages[i].drops[id] = v; }));
+      s.shopItems = [
+        { currencyId: c1, name: 'a', price: 60, buyCount: 12 },
+        { currencyId: c1, name: 'b', price: 300, buyCount: 7 },
+        { currencyId: c2, name: 'c', price: 200, buyCount: 12 },
+        { currencyId: c2, name: 'd', price: 2000, buyCount: 1 },
+        { currencyId: c3, name: 'e', price: 200, buyCount: 15 },
+        { currencyId: c3, name: 'f', price: 300, buyCount: 1 },
+        { currencyId: c4, name: 'g', price: 1500, buyCount: 2 },
+        { currencyId: c4, name: 'h', price: 300, buyCount: 10 },
+      ];
+      const t0 = performance.now();
+      const solved = solver.Solve({ ...buildModel(s), options: { timeout: 500 } });
+      const dt = performance.now() - t0;
+      assertTrue(solved.feasible, 'should be feasible');
+      assertTrue(dt < 500, 'solver must finish in <500ms, took ' + dt.toFixed(1) + 'ms');
     });
 
     test('hasMinimumData: 빈 state는 false', () => {

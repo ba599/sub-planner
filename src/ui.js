@@ -580,7 +580,9 @@ function recompute() {
 
   let solved;
   try {
-    solved = solver.Solve(model);
+    // timeout is a safety net; LP-only on this problem size typically finishes
+    // in well under 1 ms, so 500 ms should never actually trigger.
+    solved = solver.Solve({ ...model, options: { timeout: 500 } });
   } catch (e) {
     console.error(e);
     result.innerHTML = '<div class="result-err">솔버 오류: ' + escapeHtml(e.message) + '</div>';
@@ -590,6 +592,14 @@ function recompute() {
   if (!solved.feasible) {
     result.innerHTML = '<div class="result-err">현재 입력으로는 목표 달성 불가능 (드랍이 부족하거나 모순)</div>';
     return;
+  }
+
+  // LP returns fractional runs; round up so constraints stay satisfied.
+  // 1e-9 slack absorbs simplex float noise so values already at an integer
+  // don't get pushed to the next one.
+  for (let i = 0; i < 12; i++) {
+    const k = 's' + (i + 1);
+    if (solved[k]) solved[k] = Math.ceil(solved[k] - 1e-9);
   }
 
   renderSolvedResult(result, solved);

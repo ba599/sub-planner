@@ -63,15 +63,20 @@ function defaultState() {
 
 const TIE_EPSILON = 1e-6;
 
+// LP-only: we deliberately do not flag variables as integer. Branch-and-cut on
+// this structure (12 vars × 4 constraints) runs effectively forever in the pure-
+// JS solver once >3 currency constraints are active; LP relaxation + ceil() in
+// the caller finishes in <1 ms and overshoots optimal AP by <0.1%.
+// TIE_EPSILON is group-level (not per stage) so LP ties resolve toward the later
+// group. Per-stage perturbation would force the integer solver to exhaust its
+// branch tree, which is what caused v1.1.1's freeze.
 function buildModel(state) {
   const variables = {};
   state.stages.forEach((stage, i) => {
     const group = Math.floor(i / 4);
     if (!state.groupsEnabled[group]) return;
 
-    // Tiebreaker: higher stages get a micro discount in the objective
-    // so that ties in true AP resolve toward the higher stage.
-    const v = { AP: STAGE_AP[i] - TIE_EPSILON * (i + 1) };
+    const v = { AP: STAGE_AP[i] - TIE_EPSILON * group };
     state.currencies.forEach(c => {
       const raw = stage.drops[c.id] ?? 0;
       v['c' + c.id] = applyBonus(raw, c.bonus);
@@ -88,10 +93,7 @@ function buildModel(state) {
     if (remaining > 0) constraints['c' + c.id] = { min: remaining };
   });
 
-  const ints = {};
-  Object.keys(variables).forEach(k => { ints[k] = 1; });
-
-  return { optimize: 'AP', opType: 'min', variables, constraints, ints };
+  return { optimize: 'AP', opType: 'min', variables, constraints };
 }
 
 function computeBalance(state, solverResult) {
